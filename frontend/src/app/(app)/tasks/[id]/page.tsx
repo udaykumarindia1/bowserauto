@@ -92,7 +92,7 @@ export default function TaskWorkspacePage() {
         <StatusBadge status={t.status} />
         {t.human_control ? <HudPill tone="amber" pulse>Human control</HudPill> : null}
         {t.worker_id ? <HudPill tone="dim">worker {t.worker_id.slice(0, 8)}</HudPill> : null}
-        <TaskControls task={t} sceneId={t.attention?.scene_id} />
+        {t.status !== "needs_attention" && t.status !== "waiting_for_human" ? <TaskControls task={t} sceneId={t.attention?.scene_id} /> : null}
         {writable ? (
           <>
             <Button size="icon-sm" variant="ghost" onClick={() => setEditOpen(true)} title="Edit task"><Pencil /></Button>
@@ -174,7 +174,7 @@ export default function TaskWorkspacePage() {
             />
           </div>
           <HudPanel padded={false} className="min-h-[300px]" bodyClassName="flex min-h-0 flex-col">
-            <Tabs defaultValue="agent" className="flex min-h-0 flex-1 flex-col">
+            <Tabs defaultValue={t.kind === "video_generation" && t.config.agent_mode !== "generic" ? "activity" : "agent"} className="flex min-h-0 flex-1 flex-col">
               <TabsList className="m-2 self-start">
                 <TabsTrigger value="agent">Agent decisions</TabsTrigger>
                 <TabsTrigger value="activity">Activity log</TabsTrigger>

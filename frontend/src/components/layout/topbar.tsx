@@ -73,12 +73,10 @@ export function Topbar() {
         <Settings2 className="h-3.5 w-3.5" />
       </IconButton>
 
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-        <div className="hud-glow font-mono text-lg font-bold leading-none tracking-[0.35em] text-primary">{displayName}</div>
-        <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">Browser Automation Workspace · {auth?.organization.name}</div>
+      <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-3 text-center">
+        <div className="hud-glow truncate font-mono text-lg font-bold leading-none tracking-[0.35em] text-primary">{displayName}</div>
+        <div className="mt-1 hidden max-w-full truncate font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground md:block">Browser Automation Workspace · {auth?.organization.name}</div>
       </div>
-
-      <div className="flex-1" />
       <div className="hidden items-center gap-1.5 lg:flex">
         <HudPill tone={connection === "open" ? "green" : "amber"} pulse={connection !== "open"}>
           {connection === "open" ? "LINK SECURE" : `LINK ${connection}`}

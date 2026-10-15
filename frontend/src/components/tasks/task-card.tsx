@@ -19,10 +19,10 @@ export function AttentionBanner({ task, className }: { task: Task; className?: s
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-hud-amber" />
         <div className="min-w-0 flex-1">
           <p className="hud-title text-hud-amber">
-            {att.kind === "login" ? "Login required" : att.kind === "verification" ? "Verification required" : att.kind === "blocked" ? "Blocked by the platform" : "Needs attention"}
+            {task.human_control ? "Human control" : att.kind === "login" ? "Login required" : att.kind === "verification" ? "Verification required" : att.kind === "blocked" ? "Blocked by the platform" : "Needs attention"}
             {att.scene_code ? ` · ${att.scene_code}` : ""}
           </p>
-          <p className="mt-1 text-xs text-foreground">{att.reason || task.error || "The agent paused and is waiting for you."}</p>
+          <p className="mt-1 text-xs text-foreground">{task.human_control ? "You are driving the browser. Finish the step (login, CAPTCHA, verification…) and return control to the agent." : att.reason || task.error || "The agent paused and is waiting for you."}</p>
           <p className="mt-1 text-[10px] text-muted-foreground">
             CAPTCHA, MFA and logins are never bypassed — take over, complete the step yourself, then return control. {att.since ? `Waiting ${timeAgo(att.since)}.` : ""}
           </p>
