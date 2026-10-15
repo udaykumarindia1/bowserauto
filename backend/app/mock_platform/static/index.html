@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MockVid Studio – AI Video Generator (Demo)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0f1117; --panel:#171a23; --border:#262a36; --text:#e6e8ee; --muted:#8b91a1; --accent:#6d5efc; --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--border); background:#12141c; }
+  header h1 { font-size:18px; margin:0; letter-spacing:.3px; }
+  header h1 span { color: var(--accent); }
+  .wrap { display:grid; grid-template-columns: 420px 1fr; gap:24px; padding:24px; max-width:1240px; margin:0 auto; }
+  .panel { background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  label { display:block; font-size:12px; color: var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.6px; }
+  textarea, input[type=text], input[type=email], input[type=password], select { width:100%; background:#0d0f15; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:14px; font-family: inherit; }
+  textarea { min-height:140px; resize: vertical; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--border); border-radius:999px; padding:6px 12px; font-size:13px; cursor:pointer; background:#0d0f15; color:var(--text); }
+  .chip[aria-pressed="true"] { border-color: var(--accent); background: rgba(109,94,252,.15); }
+  button.primary { margin-top:18px; width:100%; background: var(--accent); color:white; border:none; border-radius:10px; padding:12px 16px; font-size:15px; font-weight:600; cursor:pointer; }
+  button.primary:disabled { opacity:.5; cursor:not-allowed; }
+  button.secondary { background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; cursor:pointer; font-size:13px; }
+  .status { display:flex; align-items:center; gap:10px; font-size:15px; margin-bottom:12px; }
+  .dot { width:10px; height:10px; border-radius:50%; background: var(--muted); }
+  .status-generating .dot, .status-queued .dot, .status-processing .dot { background: var(--warn); box-shadow:0 0 0 4px rgba(245,158,11,.15); }
+  .status-completed .dot { background: var(--ok); }
+  .status-failed .dot { background: var(--bad); }
+  .bar { height:8px; background:#0d0f15; border-radius:999px; overflow:hidden; border:1px solid var(--border); }
+  .bar > div { height:100%; width:0; background: linear-gradient(90deg, var(--accent), #9b8cff); transition: width .4s; }
+  video { width:100%; border-radius:10px; border:1px solid var(--border); margin-top:14px; background:#000; }
+  .download { display:inline-block; margin-top:14px; background: var(--ok); color:#06240f; padding:10px 14px; border-radius:8px; font-weight:600; text-decoration:none; }
+  .muted { color: var(--muted); font-size:13px; }
+  .history { margin-top:18px; border-top:1px solid var(--border); padding-top:12px; font-size:13px; }
+  .history div { padding:4px 0; color: var(--muted); }
+  .error { color: var(--bad); font-size:14px; margin-top:8px; }
+  .hidden { display:none !important; }
+  .check { margin-top:16px; padding:16px; border:1px dashed var(--warn); border-radius:10px; background: rgba(245,158,11,.08); }
+  .check label { text-transform:none; letter-spacing:0; font-size:15px; color:var(--text); display:flex; align-items:center; gap:10px; cursor:pointer; margin:0; }
+  .login { max-width:380px; margin:80px auto; }
+  .login h2 { margin-top:0; }
+  .uploads { font-size:13px; color: var(--muted); margin-top:6px; }
+  footer { text-align:center; color: var(--muted); font-size:12px; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Mock</span>Vid Studio <span class="muted" style="font-size:12px;color:var(--muted)">demo video generator for testing automation</span></h1>
+  <div id="userbox" class="muted"></div>
+</header>
+
+<section id="loginView" class="panel login hidden">
+  <h2>Sign in</h2>
+  <p class="muted">Any email and password work. This simulates a platform login wall so you can test persistent browser sessions.</p>
+  <label for="email">Email</label>
+  <input id="email" type="email" placeholder="Email" autocomplete="username" />
+  <label for="password">Password</label>
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+  <button id="loginBtn" class="primary">Sign in</button>
+</section>
+
+<main id="appView" class="wrap hidden">
+  <section class="panel" data-testid="composer">
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" data-testid="prompt" placeholder="Describe the video you want to generate"></textarea>
+    <label for="reference">Reference image</label>
+    <input id="reference" type="file" accept="image/*,video/*" multiple />
+    <div id="uploads" class="uploads">No reference uploaded</div>
+    <label>Duration</label>
+    <div class="row" id="durations">
+      <button class="chip" data-duration="5" aria-pressed="false">5s</button>
+      <button class="chip" data-duration="8" aria-pressed="true">8s</button>
+      <button class="chip" data-duration="10" aria-pressed="false">10s</button>
+    </div>
+    <label>Aspect ratio</label>
+    <div class="row" id="ratios">
+      <button class="chip" data-ratio="16:9" aria-pressed="true">16:9</button>
+      <button class="chip" data-ratio="9:16" aria-pressed="false">9:16</button>
+      <button class="chip" data-ratio="1:1" aria-pressed="false">1:1</button>
+    </div>
+    <div id="humanCheck" class="check hidden">
+      <label><input id="humanCheckbox" type="checkbox" /> Verify you are human</label>
+      <div class="muted" style="margin-top:6px">Security check: please confirm you are not a robot before generating.</div>
+    </div>
+    <button id="generate" class="primary" data-testid="generate">Generate</button>
+    <div id="error" class="error"></div>
+  </section>
+
+  <section class="panel" data-testid="result">
+    <div id="status" class="status status-idle"><span class="dot"></span><span id="statusText">Status: Ready</span></div>
+    <div class="bar"><div id="progress"></div></div>
+    <div id="result" class="hidden">
+      <video id="video" controls muted playsinline></video>
+      <div><a id="download" class="download" download>Download video</a></div>
+      <div class="muted" id="meta"></div>
+    </div>
+    <div class="history" id="history"><strong>Generation history</strong></div>
+  </section>
+</main>
+<footer>MockVid Studio is a built-in demo platform. It never calls external AI services.</footer>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+  const base = location.pathname.replace(/\/[^/]*$/, '');
+  const api = (p) => `${base}/api${p}`;
+  const options = { speed: qs.get('speed') || 'normal', fail_rate: parseFloat(qs.get('fail_rate') || '0'), human_check_attempt: parseInt(qs.get('human_check') || '0', 10), login: qs.get('login') === '1' };
+  const state = { duration: 8, ratio: '16:9', job: null, attempts: 0, uploads: 0, humanVerified: false, timer: null };
+  const $ = (id) => document.getElementById(id);
+
+  const show = (loggedIn, user) => {
+    $('loginView').classList.toggle('hidden', loggedIn);
+    $('appView').classList.toggle('hidden', !loggedIn);
+    $('userbox').innerHTML = loggedIn ? `Signed in as <strong>${user}</strong> · <button id="logout" class="secondary">Log out</button>` : '';
+    if (loggedIn) $('logout').onclick = async () => { await fetch(api('/logout'), { method: 'POST' }); init(); };
+  };
+
+  async function init() {
+    const me = await fetch(api('/me') + (options.login ? '?login=1' : '')).then(r => r.json());
+    show(me.logged_in, me.user);
+  }
+
+  $('loginBtn').onclick = async () => {
+    const email = $('email').value.trim();
+    const password = $('password').value;
+    if (!email || !password) { alert('Enter any email and password'); return; }
+    await fetch(api('/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    init();
+  };
+
+  document.querySelectorAll('#durations .chip').forEach(b => b.onclick = () => { state.duration = +b.dataset.duration; document.querySelectorAll('#durations .chip').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  document.querySelectorAll('#ratios .chip').forEach(b => b.onclick = () => { state.ratio = b.dataset.ratio; document.querySelectorAll('#ratios .chip').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  $('reference').onchange = () => { state.uploads = $('reference').files.length; $('uploads').textContent = state.uploads ? `${state.uploads} reference file(s) attached: ${Array.from($('reference').files).map(f => f.name).join(', ')}` : 'No reference uploaded'; };
+  $('humanCheckbox').onchange = () => { if ($('humanCheckbox').checked) { state.humanVerified = true; $('humanCheck').classList.add('hidden'); $('generate').disabled = false; } };
+
+  const setStatus = (cls, text, pct) => {
+    $('status').className = `status status-${cls}`;
+    $('statusText').textContent = `Status: ${text}`;
+    $('progress').style.width = `${pct}%`;
+  };
+
+  $('generate').onclick = async () => {
+    const prompt = $('prompt').value.trim();
+    $('error').textContent = '';
+    if (!prompt) { $('error').textContent = 'Please enter a prompt first.'; return; }
+    state.attempts += 1;
+    if (options.human_check_attempt && state.attempts === options.human_check_attempt && !state.humanVerified) {
+      $('humanCheck').classList.remove('hidden');
+      $('generate').disabled = true;
+      setStatus('idle', 'Security check required', 0);
+      return;
+    }
+    $('result').classList.add('hidden');
+    $('generate').disabled = true;
+    setStatus('queued', 'Queued', 3);
+    const res = await fetch(api('/generate'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, duration: state.duration, aspect_ratio: state.ratio, speed: options.speed, fail_rate: options.fail_rate, references: state.uploads }) });
+    if (!res.ok) { $('error').textContent = 'Generation request failed.'; $('generate').disabled = false; setStatus('failed', 'Generation failed: request error', 0); return; }
+    state.job = await res.json();
+    poll();
+  };
+
+  async function poll() {
+    if (!state.job) return;
+    const job = await fetch(api(`/jobs/${state.job.id}`)).then(r => r.json());
+    if (job.status === 'queued') setStatus('queued', 'Queued', 5);
+    else if (job.status === 'generating') setStatus('generating', `Generating your video… ${job.progress}%`, job.progress);
+    else if (job.status === 'processing') setStatus('processing', 'Processing', 96);
+    else if (job.status === 'failed') { setStatus('failed', `Generation failed: ${job.error}`, 0); $('generate').disabled = false; addHistory(job, false); state.job = null; return; }
+    else if (job.status === 'completed') {
+      setStatus('completed', 'Generation complete', 100);
+      $('result').classList.remove('hidden');
+      $('video').src = api(`/download/${job.id}?inline=1`);
+      $('download').href = api(`/download/${job.id}`);
+      $('download').setAttribute('download', `mockvid_${job.id}.mp4`);
+      $('meta').textContent = `${job.duration}s · ${job.aspect_ratio} · job ${job.id}`;
+      $('generate').disabled = false;
+      addHistory(job, true);
+      state.job = null;
+      return;
+    }
+    state.timer = setTimeout(poll, 700);
+  }
+
+  function addHistory(job, ok) {
+    const div = document.createElement('div');
+    div.textContent = `${new Date().toLocaleTimeString()} — ${ok ? '✓' : '✗'} ${job.prompt.slice(0, 60)}${job.prompt.length > 60 ? '…' : ''}`;
+    $('history').appendChild(div);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
