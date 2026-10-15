@@ -395,6 +395,7 @@ class Worker:
     # ----------------------------------------------------------------- heartbeat
     async def _heartbeat(self) -> None:
         now = datetime.now(UTC)
+        self._touch_liveness(now)
         async with session_scope() as db:
             if self.runs:
                 await db.execute(update(Task).where(Task.id.in_(list(self.runs))).values(heartbeat_at=now))
@@ -445,6 +446,15 @@ class Worker:
                 session.locked_by_task_id = None
                 # keep desired_state so this worker re-opens it if the user wanted it open
 
+    def _touch_liveness(self, now: datetime) -> None:
+        """Write a small liveness file used by container health checks (see app.workers.healthcheck)."""
+        try:
+            path = liveness_path(self.settings.resolved_data_dir)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"{self.id} {now.isoformat()} runs={len(self.runs)} hosts={len(self.hosts)}\n")
+        except OSError as exc:  # never let a read-only volume kill the worker loop
+            logger.debug("liveness file not writable: %s", exc)
+
     # --------------------------------------------------------------------- stats
     def stats(self) -> dict[str, Any]:
         return {
@@ -458,6 +468,11 @@ class Worker:
 
 
 _worker: Worker | None = None
+
+
+def liveness_path(data_dir: Path) -> Path:
+    """Per-process liveness file; one per container/host so a shared volume works too."""
+    return data_dir / "workers" / f"{socket.gethostname()}-{os.getpid()}.alive"
 
 
 def get_worker() -> Worker | None:

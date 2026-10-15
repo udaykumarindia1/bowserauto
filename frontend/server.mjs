@@ -11,6 +11,7 @@
  */
 import http from "node:http";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import httpProxy from "http-proxy";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -49,9 +50,15 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 // Start Next.js on the internal port unless an external instance is already managed.
+// In the Docker image the standalone server (next.config output: "standalone") is used, which
+// needs no node_modules; locally we fall back to `next start` / `next dev`.
 if (process.env.NEXT_EXTERNAL !== "1") {
+  const standalone = process.env.NEXT_STANDALONE_SERVER || "./server.js";
+  const nextEnv = { ...process.env, PORT: String(NEXT_PORT), HOSTNAME: "127.0.0.1" };
   const args = isProd ? ["start", "-p", String(NEXT_PORT), "-H", "127.0.0.1"] : ["dev", "-p", String(NEXT_PORT), "-H", "127.0.0.1"];
-  const next = spawn("npx", ["next", ...args], { stdio: "inherit", env: process.env });
+  const next = isProd && existsSync(standalone)
+    ? spawn(process.execPath, [standalone], { stdio: "inherit", env: nextEnv })
+    : spawn("npx", ["next", ...args], { stdio: "inherit", env: process.env });
   const stop = () => { next.kill("SIGTERM"); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

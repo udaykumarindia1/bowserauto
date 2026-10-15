@@ -1,0 +1,182 @@
+# BowserAuto – production-style stack.
+#
+#   cp .env.example .env            # set SECRET_KEY / ENCRYPTION_KEY / POSTGRES_PASSWORD
+#   docker compose up -d --build
+#   open http://localhost:${WEB_PORT:-3000}
+#
+# Services
+#   frontend        Next.js + single-origin proxy (/api → backend, WebSockets included)
+#   backend         FastAPI API (no browsers, no embedded worker)
+#   worker          general worker (non-browser tasks, housekeeping, recovery)
+#   browser-worker  Playwright/Chromium worker hosting persistent browser sessions (scale this)
+#   postgres, redis persistence + event bus / worker wake-ups
+#
+# Profiles
+#   --profile proxy   adds nginx in front of the frontend (TLS termination point, see deploy/nginx.conf)
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_JSON: "true"
+  SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env (python -m app.core.security gen-key)}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bowser}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-bowserauto}
+  REDIS_URL: redis://redis:6379/0
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+  TRUSTED_HOSTS: ${TRUSTED_HOSTS:-*}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+  DATA_DIR: /data
+  MOCK_PLATFORM_URL: http://backend:8000/mock-platform/
+  LLM_PROVIDER: ${LLM_PROVIDER:-none}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+  NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL:-}
+  MAX_TASK_DURATION_SECONDS: ${MAX_TASK_DURATION_SECONDS:-21600}
+  MAX_BROWSER_SESSIONS_PER_ORG: ${MAX_BROWSER_SESSIONS_PER_ORG:-10}
+  MAX_GENERATED_FILE_SIZE_MB: ${MAX_GENERATED_FILE_SIZE_MB:-2048}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bowser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-bowserauto}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bowser} -d ${POSTGRES_DB:-bowserauto}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    image: bowserauto-backend
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      EMBEDDED_WORKER: "false"
+      AUTO_MIGRATE: "true"
+    volumes:
+      - app-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 40s
+      retries: 5
+
+  worker:
+    image: bowserauto-backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.main"]
+    environment:
+      <<: *backend-env
+      AUTO_MIGRATE: "false"
+      WORKER_CAPABILITIES: general
+    volumes:
+      - app-data:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.workers.healthcheck"]
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  browser-worker:
+    image: bowserauto-backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.main"]
+    environment:
+      <<: *backend-env
+      AUTO_MIGRATE: "false"
+      WORKER_CAPABILITIES: browser,general
+      BROWSER_HEADLESS: ${BROWSER_HEADLESS:-true}
+      MAX_CONCURRENT_TASKS_PER_WORKER: ${MAX_CONCURRENT_TASKS_PER_WORKER:-1}
+      STREAM_MAX_FPS: ${STREAM_MAX_FPS:-8}
+    volumes:
+      - app-data:/data
+    # Chromium needs a bigger /dev/shm than Docker's 64 MB default.
+    shm_size: "1gb"
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      replicas: ${BROWSER_WORKERS:-1}
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.workers.healthcheck"]
+      interval: 20s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    image: bowserauto-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+      PORT: "3000"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ["proxy"]
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  app-data:
