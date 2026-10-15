@@ -18,7 +18,7 @@ customisable colours and assistant name) that ports the *functionality* of
              backend (FastAPI) ──► PostgreSQL (tasks, scenes, sessions, files, audit…)
                 │   ▲                Redis (event bus + worker wake-ups)
    task queue   ▼   │ events / CDP frames
-          browser-worker(s) ──► Playwright ──► Chromium (persistent encrypted profiles)
+          browser-worker(s) ──► Playwright ──► Chromium (persistent browser profiles; see storage-encryption caveat in the audit)
                                                   └──► Google Flow / Runway / … / Mock Video Generator
 ```
 
@@ -29,7 +29,7 @@ customisable colours and assistant name) that ports the *functionality* of
 | Area | What is implemented |
 | --- | --- |
 | AI task agent | Tool-based browser agent (`browser.*`, `filesystem.*`, `task.*` tools), provider-neutral planner with OpenAI-compatible presets (OpenAI, OpenRouter, Groq, DeepSeek, Together, Fireworks, Mistral, xAI), native Gemini/Ollama/Anthropic adapters, encrypted org keys, health test, and deterministic heuristic fallback |
-| Browser automation | Playwright/Chromium driven by **workers** (never inside the API), persistent per-session profiles encrypted at rest, CDP screencast streamed over WebSocket (not repeated screenshots), URL/title/action indicators, tabs, uploads |
+| Browser automation | Playwright/Chromium driven by **workers** (never inside the API), persistent per-session profiles (mode 0700 on the shared data volume; live files are not application-encrypted, while Fernet covers stored state snapshots), CDP screencast streamed over WebSocket (not repeated screenshots), URL/title/action indicators, tabs, uploads |
 | Human takeover | **TAKE OVER BROWSER** pauses the agent and gives you click/type/scroll/paste/upload control in the live viewer; **RETURN CONTROL TO AI** re-inspects page state and resumes. CAPTCHA/MFA/logins are never bypassed |
 | Task queue | DB-persisted queue with priority (1–10), reorder, pause/resume/stop/retry/skip, STOP EVERYTHING, atomic claims, heartbeats and crash recovery (queue survives restarts) |
 | Script → scenes | LLM or heuristic script analysis into editable scenes (reorder, duplicate, delete, edit prompt/visual/camera/dialogue, per-scene platform, reference images, regenerate prompt) |
@@ -148,12 +148,13 @@ docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, 
 * [docs/OPERATIONS.md](docs/OPERATIONS.md) — environments, deployment, scaling, backups, troubleshooting
 * [docs/TESTING.md](docs/TESTING.md) — test strategy and commands
 * [docs/ASSISTANT.md](docs/ASSISTANT.md) — AVINASH assistant: HUD, voice, memory, customisation; Mark-LV feature mapping
-* [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — implementation phases 1–15 and the final audit
+* [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — implementation phases 1–15 and prior verification notes
+* [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) — independent audit findings, limitations, and prioritized enhancements
 
 ## Non-negotiables baked into the design
 
 * The agent never bypasses CAPTCHA, MFA, logins, payments or anti-bot systems — it pauses and asks you.
-* Passwords for third-party platforms are never requested or stored; cookies/tokens never leave the worker.
+* Passwords for third-party platforms are never requested or stored. Raw browser cookie stores are not sent to the frontend; current URLs are exposed for live monitoring and may contain token-like query/fragment values (see the audit finding on URL redaction).
 * No fixed `sleep(30)` waits — state is detected from the page with configurable timeouts.
 * One scene at a time unless parallel generation is explicitly enabled for a project.
 * Browser automation runs in workers, never inside the API process.

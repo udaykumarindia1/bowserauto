@@ -31,14 +31,18 @@
 
 ## Secrets & browser state
 
-* `ENCRYPTION_KEY` (Fernet) encrypts: organisation LLM API keys (`secrets_encrypted`), browser
+* `ENCRYPTION_KEY` (Fernet) encrypts: organisation LLM API keys (`secrets_encrypted`) and browser
   storage-state snapshots (cookies/local storage used to re-attach sessions after a worker
-  restart). Production refuses to start without it.
+  restart). It does **not** encrypt the live Chromium profile directory; protect the data volume
+  and backups with host/volume encryption and restrictive access. Production refuses to start
+  without the key.
 * The API returns LLM keys only masked (`has_api_key`, `api_key_masked`), never the plaintext.
 * **No third-party platform password is ever requested or stored.** Users log into platforms by
-  hand in the live browser; what persists is the encrypted Chromium profile on the worker volume.
-  Cookies/tokens are never serialised into API responses or events; the UI only receives JPEG
-  frames, URL, title and login *status*.
+  hand in the live browser. The live Chromium profile persists on the shared worker/API data
+  volume and is not application-encrypted (see above). Raw cookie-store data is not intentionally
+  serialized into API responses; however, current URLs are exposed to authorized UI clients and
+  the agent, and can themselves carry sensitive query/fragment values. This URL-redaction gap is
+  documented as an open finding in `docs/PROJECT_AUDIT.md`; do not treat URL fields as secret-free.
 * `.env` files are git-ignored; `docker-compose.yml` reads secrets from the environment only.
 
 ## Input validation, XSS, uploads
@@ -48,8 +52,9 @@
   pre-paint theme snippet in `app/layout.tsx` (static, no user data).
 * Security headers middleware: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`
   (`SAMEORIGIN` only for the mock platform and file previews), `Content-Security-Policy:
-  default-src 'none'` for API/download responses, `Referrer-Policy`, `Permissions-Policy`
-  (nginx adds them for the frontend too).
+  default-src 'none'` for API/download responses, `Referrer-Policy`, `Permissions-Policy`.
+  The optional nginx proxy adds frontend response headers; direct access to the published frontend
+  port does not pass through nginx and must be protected separately.
 * Uploads are limited by `MAX_UPLOAD_SIZE_MB`, filtered by `ALLOWED_UPLOAD_EXTENSIONS`, stored
   under the project folder with sanitised names; downloads from platforms are verified
   (non-empty, MIME/size caps `MAX_GENERATED_FILE_SIZE_MB`, sha256) before being registered.

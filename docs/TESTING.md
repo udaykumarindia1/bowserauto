@@ -11,11 +11,11 @@
 * Suites are serial on purpose: the embedded worker launches (fake) browsers; running pytest in
   parallel with other heavy processes makes session start-up timeouts flaky.
 
-## Backend suite (78 tests)
+## Backend suite (97 collected pytest cases from 72 test functions; verified 2026-10-16)
 
 ```bash
 cd backend && source ../.venv/bin/activate
-timeout 900 python -m pytest -q            # whole suite (~4–6 min: real waits are short but real)
+timeout 900 python -m pytest -q            # whole suite (recent audit run: 52.51 s; varies by host)
 python -m pytest -q tests/test_queue.py    # a single file
 ruff check app tests && ruff format --check app tests
 ```
@@ -24,10 +24,12 @@ ruff check app tests && ruff format --check app tests
 | --- | --- |
 | `test_units.py` (14) | heuristic script parser (markers, free text, limits, target duration), adapter **state detection follows page state not timers**, timeouts instead of hangs, bounded retry backoff, scene filename patterns, safe filenames/path traversal, unique paths, MP4 verification (rejects HTML/truncated files), Argon2 + Fernet, signed payload expiry/tampering |
 | `test_auth.py` (10) | public status, register/login/logout, weak passwords, CSRF enforcement, error envelope + request id, **tenant isolation**, member roles, device sessions + revoke, change password, audit log |
-| `test_api.py` (9) | project CRUD + analysis, scene editing workflow (reorder/duplicate/delete/regenerate), assets/characters/export, generated files listing/deletion, templates/platforms/notifications/dashboard, settings limits + members, tenant isolation, CSRF/cookie protection, viewer read-only |
+| `test_api.py` (10) | project CRUD + analysis, scene editing workflow (reorder/duplicate/delete/regenerate), assets/characters/export, generated files listing/deletion, templates/platforms/notifications/dashboard, settings limits + members, tenant isolation, CSRF/cookie protection, viewer read-only |
 | `test_queue.py` (8) | video task completes with verified files, retry with backoff then success, failure after retries → `needs_attention` → skip, pause/resume/stop, priority + reorder, **tasks survive worker restart**, STOP EVERYTHING, task limits |
 | `test_takeover.py` (6) | login wall → takeover → release, **verification challenge is never bypassed**, session lifecycle + limits, viewer cannot control browsers, WebSocket requires authentication, worker evicts the longest-idle unused browser when its slots are full (and reports the wait otherwise) |
 | `test_assistant.py` (31) | AVINASH command grammar, confirmations, memory (secret refusal), briefing, capabilities, role gating, navigation hints |
+| `test_agent.py` (5) | mocked vision/context handling and agent decision/tool validation; no live provider calls |
+| `test_llm.py` (13) | provider configuration/isolation, endpoint validation, mocked provider requests, redirects and authorization-header handling |
 
 Useful filter for the noisy aiosqlite cancellation traces:
 

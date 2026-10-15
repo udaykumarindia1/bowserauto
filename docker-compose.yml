@@ -1,4 +1,4 @@
-# BowserAuto – production-style stack.
+# BowserAuto – multi-container reference stack (defaults are for local smoke testing, not public deployment).
 #
 #   cp .env.example .env            # set SECRET_KEY / ENCRYPTION_KEY / POSTGRES_PASSWORD
 #   docker compose up -d --build
@@ -12,7 +12,7 @@
 #   postgres, redis persistence + event bus / worker wake-ups
 #
 # Profiles
-#   --profile proxy   adds nginx in front of the frontend (TLS termination point, see deploy/nginx.conf)
+#   --profile proxy   adds an HTTP nginx reverse proxy on port 80; TLS is not configured by default (see deploy/nginx.conf)
 
 x-backend-env: &backend-env
   APP_ENV: ${APP_ENV:-production}
@@ -28,6 +28,7 @@ x-backend-env: &backend-env
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
   ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
   DATA_DIR: /data
+  # Development-only: setting this also mounts the unauthenticated mock router in production (A-05).
   MOCK_PLATFORM_URL: http://backend:8000/mock-platform/
   LLM_PROVIDER: ${LLM_PROVIDER:-none}
   LLM_API_KEY: ${LLM_API_KEY:-}

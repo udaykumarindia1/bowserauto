@@ -2,8 +2,11 @@
 
 BowserAuto's browser agent and script-to-scene analyzer use one provider-neutral async client
 contract. No vendor SDK is required in the browser worker. The agent requests one structured action
-at a time, validates it against the registered browser tools, and falls back to the deterministic
-planner when the selected provider is not configured or unavailable.
+at a time, checks the basic `{tool, args, reasoning}` response shape, and dispatches a known tool
+through the registry (handlers do selective argument checks; the registry does not enforce a full
+JSON Schema). It falls back to the deterministic planner when the selected provider is not
+configured or unavailable. This is not a universal URL-destination policy or an approval gate for
+consequential browser actions; see `docs/PROJECT_AUDIT.md`.
 
 ## Supported provider families
 

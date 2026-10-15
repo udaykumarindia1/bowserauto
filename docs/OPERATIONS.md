@@ -40,10 +40,15 @@ docker compose logs -f browser-worker  # Chromium + task logs
   (each hosts its own sessions; tasks bound to a session stay on the worker hosting it).
 * `shm_size: 1gb` on browser workers is required for Chromium stability.
 * Persistent data lives in the named volumes `postgres-data`, `redis-data`, `app-data`
-  (project files, encrypted browser profiles, screenshots). Back them up together.
-* TLS: run `--profile proxy` and terminate TLS in nginx (see `deploy/nginx.conf`), or put a cloud
-  load balancer in front of the `frontend` port. Set `PUBLIC_BASE_URL=https://…`,
-  `ALLOWED_ORIGINS=https://…`, `COOKIE_SECURE=true`.
+  (project files, live Chromium profiles, encrypted storage-state snapshots, screenshots). The
+  live profiles are not application-encrypted: use encrypted host/volume storage and encrypted
+  backups, and protect the backups with the same care as active browser sessions. Back up related
+  volumes consistently.
+* **TLS is not configured by the current nginx profile.** `deploy/nginx.conf` listens on HTTP
+  port 80 and has only a commented, incomplete 443 example. Terminate TLS at a separately configured
+  reverse proxy/load balancer, or add and test a certificate-backed 443 server before exposure.
+  Do not expose the published frontend port over plain HTTP to untrusted networks. Set
+  `PUBLIC_BASE_URL=https://…`, `ALLOWED_ORIGINS=https://…`, and `COOKIE_SECURE=true`.
 
 ### Health & liveness
 
@@ -74,8 +79,9 @@ Migrations are plain Alembic (`backend/alembic`). Create new ones with
 * PostgreSQL: `docker compose exec postgres pg_dump -U bowser bowserauto > backup.sql`.
 * Files/profiles: snapshot the `app-data` volume (`docker run --rm -v bowserauto_app-data:/data
   -v $PWD:/backup alpine tar czf /backup/app-data.tgz /data`).
-* Keep `ENCRYPTION_KEY` with the backup — encrypted browser profiles and LLM keys are useless
-  without it.
+* Keep `ENCRYPTION_KEY` with the backup for encrypted LLM keys and storage-state snapshots. It
+  does not encrypt or restore the live Chromium profile; protect the `app-data` backup separately
+  with encryption and access controls.
 
 ## Running without Docker (systemd style)
 

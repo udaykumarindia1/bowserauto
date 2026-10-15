@@ -49,7 +49,7 @@ User ──< OrganizationMember >── Organization ──< Project ──< Sce
                                       │      ├──< AgentRun ──< AgentAction│
                                       │      ├──< Screenshot              │
                                       │      └──────────────── (produces) ┘
-                                      ├──< BrowserSession (encrypted profile dir, login state)
+                                      ├──< BrowserSession (persistent profile dir + encrypted storage-state snapshot)
                                       ├──< Platform (per-org enable/overrides)
                                       ├──< ActivityLog, AuditLog, Notification, MemoryFact, Template
 ```
@@ -100,8 +100,13 @@ POST /api/tasks ─► draft ─(start)─► queued ─► running ─► compl
 ## 4. Browser layer
 
 * One Chromium **persistent context per BrowserSession** (`data/profiles/<id>`), launched by the
-  worker that hosts it. Profiles contain cookies/local storage; they are encrypted at rest when
-  `ENCRYPTION_KEY` is set and are never read by the API or sent to the UI.
+  worker that hosts it. The live Chromium profile contains cookies/local storage and is protected
+  by POSIX directory permissions (mode `0700`); it is **not application-encrypted** by
+  `ENCRYPTION_KEY`. Only the serialized storage-state snapshot is Fernet-encrypted. Operators
+  must use encrypted host/volume storage and encrypted backups for at-rest protection. The API
+  code does not intentionally read live profile files; note that Compose mounts the shared
+  `app-data` volume into the API and worker containers, so this is not filesystem isolation from
+  a compromised API process.
 * Frames come from the **CDP `Page.screencast`** (JPEG, `STREAM_MAX_FPS`, `STREAM_QUALITY`,
   `STREAM_MAX_WIDTH`), published on `session:{id}:frames` and fanned out to WebSocket subscribers;
   a `/preview` endpoint serves the latest frame for clients without WebSockets.
@@ -124,7 +129,7 @@ POST /api/tasks ─► draft ─(start)─► queued ─► running ─► compl
 ```
 DATA_DIR/
   projects/<project_id>/{script,references,scenes,generated,final,logs}/
-  profiles/<session_id>/           encrypted Chromium profile
+  profiles/<session_id>/           persistent Chromium profile (not application-encrypted)
   screenshots/<task_id>/
   workers/<host>-<pid>.alive       liveness files for container health checks
 ```

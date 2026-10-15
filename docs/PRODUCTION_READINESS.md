@@ -1,8 +1,11 @@
 # Production readiness
 
-This document tracks the implementation phases and the final audit. "Verified" means exercised
-in this repository by automated tests or the smoke scripts (real Chromium against the built-in
-mock platform) — never against real AI platforms.
+This document records implementation-phase verification from the original build; it is **not**
+a production-readiness certification. "Verified" below means exercised in this repository by
+automated tests or the smoke scripts (real Chromium against the built-in mock platform) — never
+against real AI platforms. The independent audit dated 2026-10-16 is in
+[`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) and documents unresolved high-priority risks. Production
+readiness is **not certified** until those findings are addressed and re-tested.
 
 ## Phases
 
@@ -22,13 +25,17 @@ mock platform) — never against real AI platforms.
 | 12 | Files, signed URLs, export, dashboard, activity stream, notifications | done | `test_generated_files_listing_and_deletion`, `test_templates_platforms_notifications_dashboard` |
 | 13 | Frontend: all pages, three-panel workspace, AVINASH HUD, voice, customisation | done | `scripts/ui_snapshots.py` (11 routes, zero console errors), `/tmp/ui_flow` E2E |
 | 14 | Security hardening, limits, observability, env separation, Docker Compose | done | `docs/SECURITY.md`, `docs/OPERATIONS.md`, `docker-compose.yml` |
-| 15 | Audit (§44) + bug fixing | done | below |
+| 15 | Initial audit (§44) + bug fixing | initial review complete; independent follow-up open | `docs/PROJECT_AUDIT.md` |
 
 ## §44 audit checklist
 
+The checklist below is historical implementation evidence, not a security sign-off. Its route-count
+and smoke-test entries do not imply exhaustive route coverage or a production-safe deployment; see
+[`docs/PROJECT_AUDIT.md`](PROJECT_AUDIT.md) for current verified gaps and limitations.
+
 | Check | Result |
 | --- | --- |
-| All API endpoints work | 101 operations in `/api/openapi.json`; covered by the backend unit/API suite + smoke scripts |
+| API surface inventoried | 101 operations in `/api/openapi.json`; exercised by a subset of backend tests and smoke scripts (not exhaustive route coverage) |
 | Live browser viewer streams at usable framerate | CDP screencast frames (JPEG, throttled to `STREAM_MAX_FPS` with the latest frame always flushed, `STREAM_QUALITY`) over the authenticated WebSocket; verified in UI flow |
 | Human takeover works | pause → `waiting_for_human` + `human_control` → user input relayed → release re-inspects state → `running` (`test_login_wall_takeover_and_release`, UI flow) |
 | Queue persistence and resume | DB-backed; running tasks re-queued after worker death (`test_tasks_survive_worker_restart`) |
