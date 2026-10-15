@@ -88,7 +88,7 @@ export default function TaskWorkspacePage() {
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/tasks" className="hud-label flex items-center gap-1 hover:text-primary"><ArrowLeft className="h-3 w-3" /> Tasks</Link>
         <span className="text-border">/</span>
-        <h1 className="min-w-0 flex-1 truncate font-mono text-sm font-bold uppercase tracking-[0.15em] text-primary">{t.title || `Task ${t.id.slice(0, 8)}`}</h1>
+        <h1 className="min-w-0 flex-1 truncate font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary">{t.title || `Task ${t.id.slice(0, 8)}`}</h1>
         <StatusBadge status={t.status} />
         {t.human_control ? <HudPill tone="amber" pulse>Human control</HudPill> : null}
         {t.worker_id ? <HudPill tone="dim">worker {t.worker_id.slice(0, 8)}</HudPill> : null}
@@ -110,7 +110,7 @@ export default function TaskWorkspacePage() {
           <HudPanel title="EXECUTION" corners>
             <div className="space-y-2">
               <MetricBar label={progress.total ? `Scenes ${progress.completed ?? 0}/${progress.total}` : "Progress"} value={Math.round(progress.percent ?? (t.status === "completed" ? 100 : 0))} />
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-sans text-[10px]">
                 <dt className="text-muted-foreground">Kind</dt><dd>{titleCase(t.kind)}</dd>
                 <dt className="text-muted-foreground">Platform</dt><dd>{t.platform_key}</dd>
                 <dt className="text-muted-foreground">Agent mode</dt><dd>{t.config.agent_mode ?? "auto"}</dd>
@@ -123,8 +123,8 @@ export default function TaskWorkspacePage() {
                 <dt className="text-muted-foreground">Started</dt><dd>{formatDateTime(t.started_at)}</dd>
                 {t.finished_at ? <><dt className="text-muted-foreground">Finished</dt><dd>{formatDateTime(t.finished_at)}</dd></> : null}
               </dl>
-              {t.current_action ? <p className="border-l-2 border-primary pl-2 font-mono text-[11px] text-foreground">▸ {t.current_action}</p> : null}
-              {t.error ? <p className="border-l-2 border-hud-red pl-2 font-mono text-[11px] text-hud-red">{t.error}</p> : null}
+              {t.current_action ? <p className="border-l-2 border-primary pl-2 font-sans text-[11px] text-foreground">▸ {t.current_action}</p> : null}
+              {t.error ? <p className="border-l-2 border-hud-red pl-2 font-sans text-[11px] text-hud-red">{t.error}</p> : null}
               {t.status === "completed" && Object.keys(t.result ?? {}).length ? (
                 <pre className="max-h-40 overflow-auto border border-border bg-hud-dark p-2 font-mono text-[10px] text-hud-green">{JSON.stringify(t.result, null, 2)}</pre>
               ) : null}
@@ -133,7 +133,7 @@ export default function TaskWorkspacePage() {
 
           {t.instructions ? (
             <HudPanel title="INSTRUCTIONS">
-              <p className="whitespace-pre-wrap font-mono text-[11px] text-foreground/90">{t.instructions}</p>
+              <p className="whitespace-pre-wrap font-sans text-[11px] text-foreground/90">{t.instructions}</p>
             </HudPanel>
           ) : null}
 

@@ -24,7 +24,7 @@ function IconButton({ label, onClick, active, children, className }: { label: st
         type="button"
         onClick={onClick}
         aria-label={label}
-        className={cn("flex h-8 w-8 items-center justify-center border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary", active && "border-primary/60 bg-hud-ghost text-primary", className)}
+        className={cn("flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-background/50 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary", active && "border-primary/40 bg-primary/10 text-primary", className)}
       >
         {children}
       </button>
@@ -61,21 +61,21 @@ export function Topbar() {
   const markAll = useMutation({ mutationFn: () => api.notifications.markAllRead(), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }) });
   const unread = notifications.data?.unread ?? 0;
   const active = activeTasks.data?.total ?? 0;
-  const displayName = prefs.assistantName.toUpperCase().split("").join(".").replace(/\.(?=\s|$)/g, "");
+  const displayName = prefs.assistantName.toUpperCase();
 
   return (
-    <header className="relative flex h-14 shrink-0 items-center gap-2 border-b border-border bg-hud-dark px-3">
-      <span className="hud-pill text-hud-dim">{APP_VERSION}</span>
+    <header className="relative z-30 flex h-14 shrink-0 items-center gap-1.5 border-b border-border/70 bg-card/75 px-2.5 backdrop-blur-xl sm:gap-2 sm:px-4">
+      <span className="hud-pill hidden text-hud-dim sm:inline-flex">{APP_VERSION}</span>
       <IconButton label={monitorOpen ? "Hide navigation labels + SYS MONITOR" : "Show navigation + SYS MONITOR"} onClick={() => setMonitorOpen(!monitorOpen)} active={monitorOpen}>
         <PanelLeft className="h-3.5 w-3.5" />
       </IconButton>
-      <IconButton label="Customise assistant (name, voice, colour)" onClick={() => window.dispatchEvent(new CustomEvent("ba:customize"))}>
+      <IconButton label="Customise assistant (name, voice, colour)" className="hidden sm:flex" onClick={() => window.dispatchEvent(new CustomEvent("ba:customize"))}>
         <Settings2 className="h-3.5 w-3.5" />
       </IconButton>
 
       <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-3 text-center">
-        <div className="hud-glow truncate font-mono text-lg font-bold leading-none tracking-[0.35em] text-primary">{displayName}</div>
-        <div className="mt-1 hidden max-w-full truncate font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground md:block">Browser Automation Workspace · {auth?.organization.name}</div>
+        <div className="max-w-full truncate font-sans text-sm font-bold leading-none tracking-[0.1em] text-foreground sm:text-lg sm:tracking-[0.18em]">{displayName}</div>
+        <div className="mt-1 hidden max-w-full truncate text-[10px] font-medium tracking-wide text-muted-foreground md:block">AI browser workspace <span className="text-border">·</span> {auth?.organization.name}</div>
       </div>
       <div className="hidden items-center gap-1.5 lg:flex">
         <HudPill tone={connection === "open" ? "green" : "amber"} pulse={connection !== "open"}>
@@ -92,7 +92,7 @@ export function Topbar() {
           type="button"
           onClick={() => setConfirmStop(true)}
           disabled={auth?.role === "viewer"}
-          className="flex h-8 items-center gap-1.5 border border-hud-red/70 bg-hud-red/10 px-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-hud-red transition-colors hover:bg-hud-red/25 disabled:opacity-40"
+          className="flex h-9 items-center gap-1.5 rounded-xl border border-hud-red/25 bg-hud-red/5 px-2.5 text-[11px] font-semibold text-hud-red transition-colors hover:bg-hud-red/10 disabled:opacity-40"
         >
           <OctagonX className="h-3.5 w-3.5" /> <span className="hidden md:inline">STOP EVERYTHING</span>
         </button>
@@ -103,23 +103,23 @@ export function Topbar() {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="relative flex h-8 w-8 items-center justify-center border border-border text-muted-foreground hover:border-primary hover:text-primary" aria-label="Notifications">
+          <button type="button" className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-background/50 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary" aria-label="Notifications">
             <Bell className="h-3.5 w-3.5" />
-            {unread > 0 ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center bg-hud-amber px-1 font-mono text-[9px] font-bold text-black">{unread > 99 ? "99+" : unread}</span> : null}
+            {unread > 0 ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center bg-hud-amber px-1 font-sans text-[9px] font-bold text-black">{unread > 99 ? "99+" : unread}</span> : null}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80">
           <div className="flex items-center justify-between px-2 py-1.5">
             <DropdownMenuLabel className="hud-label p-0">Notifications</DropdownMenuLabel>
             {unread > 0 ? (
-              <button className="font-mono text-[10px] uppercase tracking-[0.1em] text-primary hover:underline" onClick={() => markAll.mutate()}>
+              <button className="font-sans text-[10px] uppercase tracking-[0.1em] text-primary hover:underline" onClick={() => markAll.mutate()}>
                 Mark all read
               </button>
             ) : null}
           </div>
           <DropdownMenuSeparator />
           <div className="max-h-80 overflow-y-auto">
-            {(notifications.data?.items ?? []).length === 0 ? <p className="p-3 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">No notifications yet</p> : null}
+            {(notifications.data?.items ?? []).length === 0 ? <p className="p-3 text-center font-sans text-[10px] uppercase tracking-[0.12em] text-muted-foreground">No notifications yet</p> : null}
             {(notifications.data?.items ?? []).map((n) => {
               const taskId = (n.data as { task_id?: string })?.task_id;
               return (
@@ -141,11 +141,11 @@ export function Topbar() {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="flex h-8 items-center gap-2 border border-border px-2 text-left hover:border-primary">
-            <span className="flex h-5 w-5 items-center justify-center bg-primary font-mono text-[10px] font-bold uppercase text-primary-foreground">{(auth?.user.full_name || auth?.user.email || "?").slice(0, 1)}</span>
+          <button type="button" className="flex h-9 items-center gap-2 rounded-xl border border-border/70 bg-background/50 px-2.5 text-left transition-colors hover:border-primary/40">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary font-sans text-xs font-bold uppercase text-primary-foreground">{(auth?.user.full_name || auth?.user.email || "?").slice(0, 1)}</span>
             <span className="hidden flex-col leading-tight xl:flex">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.08em]">{auth?.user.full_name || auth?.user.email}</span>
-              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">{auth?.role}</span>
+              <span className="font-sans text-[10px] font-bold uppercase tracking-[0.08em]">{auth?.user.full_name || auth?.user.email}</span>
+              <span className="font-sans text-[9px] uppercase tracking-[0.12em] text-muted-foreground">{auth?.role}</span>
             </span>
           </button>
         </DropdownMenuTrigger>

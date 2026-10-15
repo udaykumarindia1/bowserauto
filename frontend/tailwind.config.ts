@@ -35,9 +35,9 @@ const config: Config = {
           red: "hsl(var(--hud-red))",
         },
       },
-      borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 1px)", sm: "calc(var(--radius) - 2px)" },
+      borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 0.2rem)", sm: "calc(var(--radius) - 0.4rem)" },
       fontFamily: {
-        sans: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "Courier New", "monospace"],
+        sans: ["ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "Courier New", "monospace"],
       },
       keyframes: {

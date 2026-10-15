@@ -44,7 +44,7 @@ function ActivityStream() {
         ) : items.length === 0 ? (
           <div className="p-3"><EmptyState icon={ScrollText} title="No activity" description="Structured events from tasks, sessions and the agent appear here in real time." /></div>
         ) : (
-          <div className="max-h-[70vh] overflow-y-auto font-mono text-[11px]">
+          <div className="max-h-[70vh] overflow-y-auto font-sans text-[11px]">
             {items.map((a: ActivityEntry) => (
               <div key={a.id} className="border-b border-border/60 last:border-b-0">
                 <button type="button" onClick={() => setExpanded(expanded === a.id ? null : a.id)} className="flex w-full items-start gap-2 px-3 py-1.5 text-left hover:bg-hud-ghost">
@@ -80,7 +80,7 @@ function AuditLog() {
   if (audit.isError) return <ErrorState error={audit.error} retry={() => audit.refetch()} />;
   return (
     <HudPanel padded={false}>
-      <table className="w-full font-mono text-[11px]">
+      <table className="w-full font-sans text-[11px]">
         <thead><tr className="hud-label border-b border-border text-left"><th className="px-3 py-2">When</th><th className="px-2 py-2">Action</th><th className="px-2 py-2">Resource</th><th className="px-2 py-2">User</th><th className="px-2 py-2">IP</th><th className="px-2 py-2">Data</th></tr></thead>
         <tbody className="divide-y divide-border">
           {(audit.data ?? []).map((e) => (

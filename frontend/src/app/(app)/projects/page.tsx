@@ -55,7 +55,7 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="space-y-1"><Label>Clip length (s)</Label><Input type="number" min={1} max={60} value={form.clip_duration_seconds} onChange={(e) => setForm({ ...form, clip_duration_seconds: Number(e.target.value) || 8 })} /></div>
           <div className="space-y-1 sm:col-span-2"><Label>Description</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <div className="space-y-1 sm:col-span-2"><Label>Script (optional)</Label><Textarea rows={7} value={form.script_text} onChange={(e) => setForm({ ...form, script_text: e.target.value })} placeholder="Paste a script; it is split into scenes automatically (LLM when configured, heuristic otherwise)." /></div>
-          <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] sm:col-span-2">
+          <label className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em] sm:col-span-2">
             <input type="checkbox" className="accent-primary" checked={form.analyze} onChange={(e) => setForm({ ...form, analyze: e.target.checked })} /> Analyse script into scenes now
           </label>
         </div>
@@ -95,13 +95,13 @@ export default function ProjectsPage() {
               <Link key={p.id} href={`/projects/${p.id}`} className="hud-panel hud-corners block p-3 transition-colors hover:border-primary/60">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-xs font-bold uppercase tracking-[0.1em]">{p.name}</p>
+                    <p className="truncate font-sans text-xs font-bold uppercase tracking-[0.1em]">{p.name}</p>
                     <p className="hud-label mt-0.5">{titleCase(p.template_key)} · {p.platform_key}</p>
                   </div>
                   <StatusBadge status={p.active_task_status ?? p.status} />
                 </div>
                 {p.description ? <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">{p.description}</p> : null}
-                <div className="mt-3 flex items-center justify-between font-mono text-[10px] text-muted-foreground">
+                <div className="mt-3 flex items-center justify-between font-sans text-[10px] text-muted-foreground">
                   <span>{p.completed_scenes}/{p.scene_count} scenes</span>
                   <span>{timeAgo(p.updated_at)}</span>
                 </div>

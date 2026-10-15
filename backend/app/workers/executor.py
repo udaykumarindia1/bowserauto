@@ -913,6 +913,7 @@ class TaskExecutor:
                 tool_ctx,
                 llm=self.llm,
                 max_steps=self.settings.agent_max_steps,
+                use_vision=self.settings.agent_use_vision,
                 on_step=lambda step: self._record_agent_step(run_id, step),
             )
             try:

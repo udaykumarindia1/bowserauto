@@ -28,7 +28,7 @@ customisable colours and assistant name) that ports the *functionality* of
 
 | Area | What is implemented |
 | --- | --- |
-| AI task agent | Tool-based browser agent (`browser.*`, `filesystem.*`, `task.*` tools), LLM planner (OpenAI-compatible / Anthropic) with a deterministic heuristic planner when no key is configured; concise reasoning is shown, never raw chain-of-thought |
+| AI task agent | Tool-based browser agent (`browser.*`, `filesystem.*`, `task.*` tools), provider-neutral planner with OpenAI-compatible presets (OpenAI, OpenRouter, Groq, DeepSeek, Together, Fireworks, Mistral, xAI), native Gemini/Ollama/Anthropic adapters, encrypted org keys, health test, and deterministic heuristic fallback |
 | Browser automation | Playwright/Chromium driven by **workers** (never inside the API), persistent per-session profiles encrypted at rest, CDP screencast streamed over WebSocket (not repeated screenshots), URL/title/action indicators, tabs, uploads |
 | Human takeover | **TAKE OVER BROWSER** pauses the agent and gives you click/type/scroll/paste/upload control in the live viewer; **RETURN CONTROL TO AI** re-inspects page state and resumes. CAPTCHA/MFA/logins are never bypassed |
 | Task queue | DB-persisted queue with priority (1–10), reorder, pause/resume/stop/retry/skip, STOP EVERYTHING, atomic claims, heartbeats and crash recovery (queue survives restarts) |
@@ -44,7 +44,7 @@ customisable colours and assistant name) that ports the *functionality* of
 | Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, timeouts) with server ceilings and pre-run estimates |
 | Templates | Built-in (AI Video Generation, Image Generation, Research, Data Entry, Website Testing, Content Creation, Browser Workflow) + custom |
 | Dev mode | Built-in **Mock Video Generator** (`/mock-platform`) with configurable speed, failure rate, login and human-check simulation for end-to-end runs without AI credits |
-| Tests | 78 backend tests (unit, API, auth, queue, take-over, files, assistant) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
+| Tests | 97 backend tests (including mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
 
 ---
 
@@ -144,6 +144,7 @@ docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, 
 * [docs/PLATFORM_ADAPTERS.md](docs/PLATFORM_ADAPTERS.md) — how adapters work and how to add one
 * [docs/SECURITY.md](docs/SECURITY.md) — auth, tenancy, secrets, CSRF/XSS, rate limits, what is never done
 * [docs/API.md](docs/API.md) — REST/WebSocket surface (full OpenAPI at `/api/docs`)
+* [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md) — OpenAI-compatible, Gemini, Ollama, Anthropic and production provider configuration
 * [docs/OPERATIONS.md](docs/OPERATIONS.md) — environments, deployment, scaling, backups, troubleshooting
 * [docs/TESTING.md](docs/TESTING.md) — test strategy and commands
 * [docs/ASSISTANT.md](docs/ASSISTANT.md) — AVINASH assistant: HUD, voice, memory, customisation; Mark-LV feature mapping

@@ -52,7 +52,7 @@ export function MemoryPanel({ className }: { className?: string }) {
       }
       actions={
         writable && (facts.data?.length ?? 0) > 0 ? (
-          <button type="button" onClick={() => setConfirmClear(true)} className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground hover:text-hud-red">
+          <button type="button" onClick={() => setConfirmClear(true)} className="font-sans text-[9px] uppercase tracking-[0.12em] text-muted-foreground hover:text-hud-red">
             Clear all
           </button>
         ) : null
@@ -73,7 +73,7 @@ export function MemoryPanel({ className }: { className?: string }) {
         >
           <input className="hud-input" placeholder="Label (optional)" value={key} maxLength={120} onChange={(e) => setKey(e.target.value)} />
           <input className="hud-input" placeholder="Fact, e.g. brand colour is teal" value={value} maxLength={4000} onChange={(e) => setValue(e.target.value)} />
-          <button type="submit" disabled={!value.trim() || add.isPending} className="border border-primary/60 bg-hud-ghost px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50">
+          <button type="submit" disabled={!value.trim() || add.isPending} className="border border-primary/60 bg-hud-ghost px-3 py-1.5 font-sans text-[10px] font-bold uppercase tracking-[0.14em] text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50">
             Remember
           </button>
         </form>
@@ -90,9 +90,9 @@ export function MemoryPanel({ className }: { className?: string }) {
           {facts.data!.map((fact) => (
             <li key={fact.id} className="flex items-start gap-3 px-3 py-2">
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-primary">{fact.key}</div>
+                <div className="font-sans text-[10px] font-bold uppercase tracking-[0.12em] text-primary">{fact.key}</div>
                 <div className="whitespace-pre-wrap break-words text-xs text-foreground">{fact.value}</div>
-                <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+                <div className="mt-0.5 font-sans text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
                   {fact.category} · {fact.source} · {formatDateTime(fact.updated_at)}
                 </div>
               </div>

@@ -120,12 +120,12 @@ export const useJarvis = create<JarvisState>((set, get) => ({
   clear: () => set({ messages: [] }),
   pendingConfirm: null,
   setPendingConfirm: (pendingConfirm) => set({ pendingConfirm }),
-  consoleOpen: true,
+  consoleOpen: false,
   setConsoleOpen: (consoleOpen) => {
     if (typeof window !== "undefined") window.localStorage.setItem("ba.console", consoleOpen ? "1" : "0");
     set({ consoleOpen });
   },
-  monitorOpen: true,
+  monitorOpen: false,
   setMonitorOpen: (monitorOpen) => {
     if (typeof window !== "undefined") window.localStorage.setItem("ba.monitor", monitorOpen ? "1" : "0");
     set({ monitorOpen });
@@ -147,8 +147,11 @@ export const useJarvis = create<JarvisState>((set, get) => ({
       if (typeof remote.wake_enabled === "boolean") merged.wakeEnabled = remote.wake_enabled;
       if (remote.hud_style === "core" || remote.hud_style === "minimal") merged.hudStyle = remote.hud_style;
     }
-    const consoleOpen = typeof window !== "undefined" ? window.localStorage.getItem("ba.console") !== "0" : true;
-    const monitorOpen = typeof window !== "undefined" ? window.localStorage.getItem("ba.monitor") !== "0" : true;
+    const savedConsole = typeof window !== "undefined" ? window.localStorage.getItem("ba.console") : null;
+    const consoleOpen = savedConsole === null
+      ? (typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches)
+      : savedConsole === "1";
+    const monitorOpen = typeof window !== "undefined" ? window.localStorage.getItem("ba.monitor") === "1" : false;
     set({ prefs: merged, consoleOpen, monitorOpen });
   },
   briefed: false,

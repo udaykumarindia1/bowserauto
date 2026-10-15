@@ -127,13 +127,31 @@ class Settings(BaseSettings):
     generation_timeout_seconds: int = 15 * 60
     action_timeout_seconds: int = 30
     agent_max_steps: int = 40
+    agent_use_vision: bool = True
 
     # ----------------------------------------------------------------------- llm
-    llm_provider: Literal["none", "openai", "anthropic"] = "none"
+    llm_provider: Literal[
+        "none",
+        "openai",
+        "openai_compatible",
+        "openrouter",
+        "groq",
+        "deepseek",
+        "together",
+        "fireworks",
+        "mistral",
+        "xai",
+        "gemini",
+        "ollama",
+        "anthropic",
+    ] = "none"
     llm_api_key: str | None = None
     llm_model: str | None = None
     llm_base_url: str | None = None
-    llm_timeout_seconds: int = 90
+    # In production, non-public HTTP/private LLM endpoints must be explicitly allowlisted.
+    # This is useful for a private Ollama service on the same container network.
+    llm_allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    llm_timeout_seconds: int = Field(default=90, ge=5, le=300)
 
     # ------------------------------------------------------------- notifications
     smtp_host: str | None = None
@@ -153,6 +171,7 @@ class Settings(BaseSettings):
         "worker_capabilities",
         "browser_extra_args",
         "allowed_upload_extensions",
+        "llm_allowed_hosts",
         mode="before",
     )
     @classmethod

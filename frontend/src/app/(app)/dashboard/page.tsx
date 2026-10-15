@@ -62,7 +62,7 @@ function Centrepiece({ activeTasks, sessions }: { activeTasks: Task[]; sessions:
             </div>
           )}
           {live.length > 0 && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center font-sans text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               {live.length} live browser{live.length === 1 ? "" : "s"} — pick one above to watch
             </div>
           )}
@@ -82,11 +82,11 @@ export default function CommandCenterPage() {
   const attention = (d?.active_tasks ?? []).filter((t) => t.status === "needs_attention" || t.status === "waiting_for_human");
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-5 p-4 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="hud-label">◈ Command center</p>
-          <h1 className="hud-glow font-mono text-lg font-bold uppercase tracking-[0.25em] text-primary">{assistant} · Overview</h1>
+          <p className="hud-label mb-1.5">Workspace overview</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{assistant} <span className="text-muted-foreground">· Overview</span></h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {d ? (
@@ -150,8 +150,8 @@ export default function CommandCenterPage() {
                     <Link href={`/sessions/${s.id}`} className="flex items-center gap-2 px-3 py-2 hover:bg-hud-ghost">
                       <span className={cn("hud-dot", s.status === "ready" || s.status === "in_use" ? "bg-hud-green text-hud-green" : s.status === "error" || s.status === "expired" ? "bg-hud-red text-hud-red" : "bg-muted-foreground text-muted-foreground")} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-mono text-xs font-bold">{s.name}</span>
-                        <span className="block truncate font-mono text-[10px] text-muted-foreground">{s.platform_key} · {s.login_status.replace("_", " ")}{s.current_url ? ` · ${s.current_url}` : ""}</span>
+                        <span className="block truncate font-sans text-xs font-bold">{s.name}</span>
+                        <span className="block truncate font-sans text-[10px] text-muted-foreground">{s.platform_key} · {s.login_status.replace("_", " ")}{s.current_url ? ` · ${s.current_url}` : ""}</span>
                       </span>
                       <StatusBadge status={s.status} />
                     </Link>
@@ -162,7 +162,7 @@ export default function CommandCenterPage() {
           </HudPanel>
 
           <HudPanel title="RECENT ACTIVITY" actions={<Link href="/activity" className="hud-label hover:text-primary">full log →</Link>} padded={false}>
-            <ul className="max-h-80 divide-y divide-border overflow-y-auto font-mono text-[11px]">
+            <ul className="max-h-80 divide-y divide-border overflow-y-auto font-sans text-[11px]">
               {(d?.recent_activity ?? []).slice(0, 25).map((a) => (
                 <li key={a.id} className="flex gap-2 px-3 py-1.5">
                   <span className="shrink-0 text-[9px] text-muted-foreground">{formatTime(a.created_at)}</span>
@@ -178,13 +178,13 @@ export default function CommandCenterPage() {
           <HudPanel title="RECENT FILES" actions={<Link href="/files" className="hud-label hover:text-primary">all files →</Link>} padded={false}>
             <ul className="divide-y divide-border">
               {(d?.recent_files ?? []).map((f) => (
-                <li key={f.id} className="flex items-center gap-2 px-3 py-1.5 font-mono text-[11px]">
+                <li key={f.id} className="flex items-center gap-2 px-3 py-1.5 font-sans text-[11px]">
                   <span className="min-w-0 flex-1 truncate">{f.filename}</span>
                   <span className="text-muted-foreground">{formatBytes(f.size_bytes)}</span>
                   <span className="text-[9px] text-muted-foreground">{timeAgo(f.created_at)}</span>
                 </li>
               ))}
-              {(d?.recent_files.length ?? 0) === 0 ? <li className="p-3 text-center font-mono text-[11px] text-muted-foreground">Nothing generated yet</li> : null}
+              {(d?.recent_files.length ?? 0) === 0 ? <li className="p-3 text-center font-sans text-[11px] text-muted-foreground">Nothing generated yet</li> : null}
             </ul>
           </HudPanel>
         </div>

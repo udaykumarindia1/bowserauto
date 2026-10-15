@@ -377,9 +377,39 @@ export interface Dashboard {
   system: { bus: string; environment: string; mock_platform: boolean };
 }
 
+export interface LLMProviderOption {
+  id: string;
+  label: string;
+  kind: "none" | "openai_compatible" | "gemini" | "ollama" | "anthropic";
+  description: string;
+  default_model: string | null;
+  default_base_url: string | null;
+  requires_api_key: boolean;
+  model_hint: string;
+  base_url_hint: string;
+}
+
+export interface LLMConnectionTest {
+  ok: boolean;
+  provider: string;
+  model: string | null;
+  latency_ms: number;
+  message: string;
+}
+
 export interface OrgSettings {
   organization: Organization;
-  llm: { provider: string; model: string | null; base_url: string | null; has_api_key: boolean; effective_provider?: string };
+  llm: {
+    provider: string;
+    model: string | null;
+    base_url: string | null;
+    has_api_key: boolean;
+    api_key_masked?: string | null;
+    effective_provider?: string;
+    configured?: boolean;
+    status?: { configured: boolean; provider: string; model: string | null; source: string; status: string; message: string };
+    providers?: LLMProviderOption[];
+  };
   limits: Record<string, number>;
   effective_limits: Record<string, number>;
   system: Record<string, unknown>;

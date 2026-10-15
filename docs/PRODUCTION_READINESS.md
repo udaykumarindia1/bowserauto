@@ -28,7 +28,7 @@ mock platform) — never against real AI platforms.
 
 | Check | Result |
 | --- | --- |
-| All API endpoints work | 100 operations in `/api/openapi.json`; covered by 78 backend tests + smoke scripts |
+| All API endpoints work | 101 operations in `/api/openapi.json`; covered by the backend unit/API suite + smoke scripts |
 | Live browser viewer streams at usable framerate | CDP screencast frames (JPEG, throttled to `STREAM_MAX_FPS` with the latest frame always flushed, `STREAM_QUALITY`) over the authenticated WebSocket; verified in UI flow |
 | Human takeover works | pause → `waiting_for_human` + `human_control` → user input relayed → release re-inspects state → `running` (`test_login_wall_takeover_and_release`, UI flow) |
 | Queue persistence and resume | DB-backed; running tasks re-queued after worker death (`test_tasks_survive_worker_restart`) |
@@ -37,12 +37,13 @@ mock platform) — never against real AI platforms.
 | Retry logic | bounded exponential backoff, then `needs_attention` with Retry/Edit/Skip/Take over (`test_retry_policy_backoff_is_bounded`, queue tests) |
 | STOP EVERYTHING | `POST /api/tasks/stop-all` + assistant confirm gate (`test_stop_everything`) |
 | Auth/authz, tenant isolation | cookie + CSRF, roles, org scoping on every query (`test_tenant_isolation` ×2, `test_viewer_role_is_read_only`, `test_viewer_role_cannot_control_browser`) |
-| Secrets never exposed | browser storage state Fernet-encrypted at rest, never serialised in API responses; LLM keys stored encrypted and returned only masked (`api_key_masked`/`has_api_key`); memory refuses secrets |
+| Secrets never exposed | browser storage state Fernet-encrypted at rest, never serialized in API responses; organization LLM keys are encrypted and never echoed (only a fixed redaction placeholder and presence flag are returned); memory refuses secrets |
 | WebSocket auth | unauthenticated `/api/ws` closed with 4401 (`test_websocket_requires_authentication`) |
 | No silent task death | every exception path sets `failed`/`needs_attention` with `error` + activity event; stale tasks re-queued |
 | Observability | structured logs with task/session ids and durations; `X-Request-ID`; activity + audit tables |
 | Cost/limits | server ceilings + per-org limits (duration, retries, scenes, concurrency, sessions, file size, rate limit) enforced (`test_task_limits_enforced`, `test_settings_limits_and_members`) |
-| Lint/type/test gates | `ruff check`, `ruff format --check`, `pytest` (78 passed), `tsc --noEmit`, `eslint src`, `next build` |
+| LLM provider safety | OpenAI-compatible, Gemini, Ollama and Anthropic adapters tested with mocked transports; org-selected endpoints cannot inherit the server API key; provider URL restrictions and the admin-only connection test are covered by tests |
+| Lint/type/test gates | `ruff check`, `ruff format --check`, `pytest` (97 passed), `tsc --noEmit`, `eslint src`, `next build` |
 | Docker Compose | frontend, backend, worker, browser-worker, postgres, redis (+ optional nginx), health checks on all services. Written and syntax-validated; **not executed in the authoring sandbox (no Docker daemon)** — run `docker compose up` once on the target host before go-live |
 
 ## Bugs found and fixed during the audit

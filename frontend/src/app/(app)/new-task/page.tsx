@@ -140,7 +140,7 @@ function NewTaskForm() {
                 return (
                   <button key={t.id} type="button" onClick={() => setTemplateKey(t.key)} className={cn("hud-corners flex flex-col gap-1 border p-3 text-left transition-colors", active ? "border-primary bg-hud-ghost" : "border-border hover:border-primary/50")}>
                     <Icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground")} />
-                    <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em]">{t.name}</span>
+                    <span className="font-sans text-[11px] font-bold uppercase tracking-[0.12em]">{t.name}</span>
                     <span className="line-clamp-2 text-[10px] text-muted-foreground">{t.description}</span>
                   </button>
                 );
@@ -251,7 +251,7 @@ function NewTaskForm() {
                     <Label>Human check at attempt</Label>
                     <Input type="number" min={0} max={20} value={mock.human_check_attempt} onChange={(e) => setMock({ ...mock, human_check_attempt: Number(e.target.value) || 0 })} />
                   </div>
-                  <label className="flex items-end gap-2 pb-2 font-mono text-[10px] uppercase tracking-[0.12em]">
+                  <label className="flex items-end gap-2 pb-2 font-sans text-[10px] uppercase tracking-[0.12em]">
                     <input type="checkbox" className="accent-primary" checked={mock.login_required} onChange={(e) => setMock({ ...mock, login_required: e.target.checked })} /> Require login
                   </label>
                 </div>
@@ -294,7 +294,7 @@ function NewTaskForm() {
                 </Select>
               </div>
               {isVideo ? (
-                <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] sm:col-span-3">
+                <label className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em] sm:col-span-3">
                   <input type="checkbox" className="accent-primary" checked={config.retry_failed_only} onChange={(e) => setConfig({ ...config, retry_failed_only: e.target.checked })} /> Only (re)generate scenes that are not completed yet
                 </label>
               ) : null}
@@ -308,7 +308,7 @@ function NewTaskForm() {
         <div className="space-y-4">
           <HudPanel title="LAUNCH" corners>
             <div className="space-y-3">
-              <dl className="space-y-1 font-mono text-[11px]">
+              <dl className="space-y-1 font-sans text-[11px]">
                 <div className="flex justify-between"><dt className="text-muted-foreground">Workflow</dt><dd>{template?.name ?? "—"}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted-foreground">Platform</dt><dd>{platform?.name ?? effectivePlatform}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted-foreground">Browser</dt><dd className="truncate pl-2">{sessionId ? sessions.data?.find((s) => s.id === sessionId)?.name : "ephemeral"}</dd></div>
@@ -323,7 +323,7 @@ function NewTaskForm() {
               </dl>
               {estimate.data?.warnings.map((w) => <p key={w} className="text-[10px] text-hud-amber">⚠ {w}</p>)}
               {estimate.data ? <p className="text-[10px] text-muted-foreground">{estimate.data.platform_credits_note}</p> : null}
-              <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
+              <label className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em]">
                 <input type="checkbox" className="accent-primary" checked={startNow} onChange={(e) => setStartNow(e.target.checked)} /> Start immediately
               </label>
               {error ? <p className="text-xs text-hud-red">{error}</p> : null}

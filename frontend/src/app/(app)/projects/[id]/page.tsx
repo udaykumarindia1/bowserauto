@@ -40,7 +40,7 @@ function ScriptTab({ project, editable }: { project: ProjectDetail; editable: bo
   return (
     <div className="space-y-3 p-3">
       <ConfirmBanner open={confirm} title="REPLACE SCENES" detail={`Analysing the script will replace the existing ${project.scenes.length} scene(s) and their edits with a fresh breakdown.`} busy={analyze.isPending} onConfirm={() => analyze.mutate()} onCancel={() => setConfirm(false)} />
-      <Textarea rows={18} disabled={!editable} value={script} onChange={(e) => setScript(e.target.value)} placeholder="Paste the script here. Use headings like “Scene 1 — Title” or blank lines between scenes." className="font-mono" />
+      <Textarea rows={18} disabled={!editable} value={script} onChange={(e) => setScript(e.target.value)} placeholder="Paste the script here. Use headings like “Scene 1 — Title” or blank lines between scenes." className="font-sans" />
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1"><Label>Clip length (s)</Label><Input type="number" className="w-28" min={1} max={60} value={clip} onChange={(e) => setClip(Number(e.target.value) || 8)} /></div>
         <div className="space-y-1"><Label>Target total (s, optional)</Label><Input type="number" className="w-36" min={1} value={target} onChange={(e) => setTarget(e.target.value === "" ? "" : Number(e.target.value))} /></div>
@@ -52,7 +52,7 @@ function ScriptTab({ project, editable }: { project: ProjectDetail; editable: bo
           </>
         ) : null}
       </div>
-      <p className="font-mono text-[10px] text-muted-foreground">Scenes are produced by the configured LLM when available, otherwise by a deterministic heuristic splitter. Every scene stays editable before generation.</p>
+      <p className="font-sans text-[10px] text-muted-foreground">Scenes are produced by the configured LLM when available, otherwise by a deterministic heuristic splitter. Every scene stays editable before generation.</p>
     </div>
   );
 }
@@ -115,11 +115,11 @@ function ReferencesTab({ project, editable }: { project: ProjectDetail; editable
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={previews[a.id]} alt={a.filename} className="aspect-square w-full bg-black object-cover" />
                 ) : (
-                  <div className="flex aspect-square items-center justify-center bg-hud-dark font-mono text-[10px] text-muted-foreground">{a.mime_type}</div>
+                  <div className="flex aspect-square items-center justify-center bg-hud-dark font-sans text-[10px] text-muted-foreground">{a.mime_type}</div>
                 )}
                 <div className="flex items-center gap-1 px-1.5 py-1">
-                  <span className="min-w-0 flex-1 truncate font-mono text-[10px]" title={a.filename}>{a.filename}</span>
-                  <span className="font-mono text-[9px] text-muted-foreground">{formatBytes(a.size_bytes)}</span>
+                  <span className="min-w-0 flex-1 truncate font-sans text-[10px]" title={a.filename}>{a.filename}</span>
+                  <span className="font-sans text-[9px] text-muted-foreground">{formatBytes(a.size_bytes)}</span>
                   {editable ? <button type="button" onClick={() => remove.mutate(a.id)} className="text-muted-foreground hover:text-hud-red"><Trash2 className="h-3 w-3" /></button> : null}
                 </div>
               </div>
@@ -133,7 +133,7 @@ function ReferencesTab({ project, editable }: { project: ProjectDetail; editable
           {(characters.data ?? []).map((c) => (
             <li key={c.id} className="flex items-start gap-2 px-2 py-1.5">
               <div className="min-w-0 flex-1">
-                <p className="font-mono text-[11px] font-bold">{c.name}</p>
+                <p className="font-sans text-[11px] font-bold">{c.name}</p>
                 <p className="line-clamp-2 text-[10px] text-muted-foreground">{c.description}{c.voice_style ? ` · voice: ${c.voice_style}` : ""}</p>
               </div>
               {editable ? (
@@ -144,7 +144,7 @@ function ReferencesTab({ project, editable }: { project: ProjectDetail; editable
               ) : null}
             </li>
           ))}
-          {(characters.data?.length ?? 0) === 0 ? <li className="px-2 py-3 text-center font-mono text-[10px] text-muted-foreground">Characters keep prompts consistent across scenes.</li> : null}
+          {(characters.data?.length ?? 0) === 0 ? <li className="px-2 py-3 text-center font-sans text-[10px] text-muted-foreground">Characters keep prompts consistent across scenes.</li> : null}
         </ul>
         {editable ? (
           <div className="space-y-2 border border-border p-2">
@@ -175,7 +175,7 @@ function FilesTab({ projectId }: { projectId: string }) {
   return (
     <ul className="divide-y divide-border">
       {items.map((f) => (
-        <li key={f.id} className="flex items-center gap-3 px-3 py-2 font-mono text-[11px]">
+        <li key={f.id} className="flex items-center gap-3 px-3 py-2 font-sans text-[11px]">
           <FileVideo className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold">{f.filename}</p>
@@ -228,11 +228,11 @@ function SettingsTab({ project, editable }: { project: ProjectDetail; editable: 
       <div className="space-y-1"><Label>Aspect ratio</Label><Input disabled={!editable} value={form.output.aspect_ratio} onChange={(e) => setForm({ ...form, output: { ...form.output, aspect_ratio: e.target.value } })} /></div>
       <div className="space-y-1"><Label>Clip length (s)</Label><Input type="number" min={1} max={60} disabled={!editable} value={form.output.clip_duration_seconds} onChange={(e) => setForm({ ...form, output: { ...form.output, clip_duration_seconds: Number(e.target.value) || 8 } })} /></div>
       <div className="space-y-1"><Label>Filename pattern</Label><Input disabled={!editable} value={form.output.filename_pattern} onChange={(e) => setForm({ ...form, output: { ...form.output, filename_pattern: e.target.value } })} /></div>
-      <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] md:col-span-2">
+      <label className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em] md:col-span-2">
         <input type="checkbox" className="accent-primary" disabled={!editable} checked={!!form.output.parallel_generation} onChange={(e) => setForm({ ...form, output: { ...form.output, parallel_generation: e.target.checked } })} />
         Allow parallel scene generation (off = strictly one scene at a time)
       </label>
-      <p className="font-mono text-[10px] text-muted-foreground md:col-span-2">Folder: {project.folder_path || `projects/${project.id}`} (script / references / scenes / generated / final / logs)</p>
+      <p className="font-sans text-[10px] text-muted-foreground md:col-span-2">Folder: {project.folder_path || `projects/${project.id}`} (script / references / scenes / generated / final / logs)</p>
       {editable ? (
         <div className="flex gap-2 md:col-span-2">
           <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>Save settings</Button>
@@ -290,7 +290,7 @@ function ProjectView() {
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/projects" className="hud-label flex items-center gap-1 hover:text-primary"><ArrowLeft className="h-3 w-3" /> Projects</Link>
         <span className="text-border">/</span>
-        <h1 className="min-w-0 flex-1 truncate font-mono text-sm font-bold uppercase tracking-[0.15em] text-primary">{p.name}</h1>
+        <h1 className="min-w-0 flex-1 truncate font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary">{p.name}</h1>
         <HudPill tone="dim">{p.platform_key}</HudPill>
         <HudPill tone="dim">{p.visual_style}</HudPill>
         <StatusBadge status={activeTask?.status ?? p.status} />
@@ -305,9 +305,9 @@ function ProjectView() {
       </div>
       <div className="grid gap-2 sm:grid-cols-4">
         <div className="hud-panel p-2"><MetricBar label={`Completed ${completed}/${total}`} value={total ? (completed / total) * 100 : 0} /></div>
-        <div className="hud-panel flex items-center justify-between p-2 font-mono text-[10px]"><span className="text-muted-foreground">FAILED</span><span className={cn(stats.failed ? "text-hud-red" : "")}>{stats.failed ?? p.scenes.filter((s) => s.status === "failed").length}</span></div>
-        <div className="hud-panel flex items-center justify-between p-2 font-mono text-[10px]"><span className="text-muted-foreground">OUTPUT</span><span>{formatDuration(p.scenes.reduce((a, s) => a + (s.duration_seconds || 0), 0))}</span></div>
-        <div className="hud-panel flex items-center justify-between p-2 font-mono text-[10px]"><span className="text-muted-foreground">UPDATED</span><span>{timeAgo(p.updated_at)}</span></div>
+        <div className="hud-panel flex items-center justify-between p-2 font-sans text-[10px]"><span className="text-muted-foreground">FAILED</span><span className={cn(stats.failed ? "text-hud-red" : "")}>{stats.failed ?? p.scenes.filter((s) => s.status === "failed").length}</span></div>
+        <div className="hud-panel flex items-center justify-between p-2 font-sans text-[10px]"><span className="text-muted-foreground">OUTPUT</span><span>{formatDuration(p.scenes.reduce((a, s) => a + (s.duration_seconds || 0), 0))}</span></div>
+        <div className="hud-panel flex items-center justify-between p-2 font-sans text-[10px]"><span className="text-muted-foreground">UPDATED</span><span>{timeAgo(p.updated_at)}</span></div>
       </div>
 
       {activeTask ? <TaskRow task={activeTask} /> : null}
@@ -337,7 +337,7 @@ function ProjectView() {
                   </div>
                 </div>
                 <div className="p-3">
-                  {scene ? <SceneForm scene={scene} projectId={p.id} platforms={platforms.data ?? []} assets={assets.data ?? []} canWrite={writable} locked={locked} /> : <p className="font-mono text-[11px] text-muted-foreground">Select a scene.</p>}
+                  {scene ? <SceneForm scene={scene} projectId={p.id} platforms={platforms.data ?? []} assets={assets.data ?? []} canWrite={writable} locked={locked} /> : <p className="font-sans text-[11px] text-muted-foreground">Select a scene.</p>}
                 </div>
               </div>
             )}

@@ -322,9 +322,33 @@ async def test_templates_platforms_notifications_dashboard(client: ApiClient, fa
     assert (await client.get("/api/audit")).status_code == 200  # owner may read the audit log
 
 
+async def test_llm_connection_test_uses_mocked_client_only(client: ApiClient, monkeypatch) -> None:
+    saved = await client.patch(
+        "/api/settings",
+        json={"llm_provider": "openai", "llm_model": "mock-model", "llm_api_key": "sk-never-return-this"},
+    )
+    assert saved.status_code == 200
+
+    class MockLLM:
+        name = "openai"
+        model = "mock-model"
+
+        async def complete(self, _messages, **_kwargs):
+            return type("Completion", (), {"text": "OK", "model": self.model, "usage": {}})()
+
+    monkeypatch.setattr("app.api.settings.build_llm_client", lambda _overrides: MockLLM())
+    tested = await client.post("/api/settings/llm/test")
+    assert tested.status_code == 200, tested.text
+    body = tested.json()
+    assert body["ok"] is True and body["provider"] == "openai" and body["model"] == "mock-model"
+    assert body["latency_ms"] >= 0 and "never-return-this" not in tested.text
+
+
 async def test_settings_limits_and_members(client: ApiClient, other_client: ApiClient) -> None:
     settings = (await client.get("/api/settings")).json()
     assert settings["effective_limits"]["max_retries"] >= 1 and settings["llm"]["provider"]
+    provider_ids = {provider["id"] for provider in settings["llm"]["providers"]}
+    assert {"openai_compatible", "gemini", "ollama", "anthropic"}.issubset(provider_ids)
     tightened = await client.patch(
         "/api/settings", json={"limits": {"max_retries": 1, "max_browser_sessions": 2}, "name": "Studio"}
     )
@@ -342,11 +366,22 @@ async def test_settings_limits_and_members(client: ApiClient, other_client: ApiC
     assert (
         saved.status_code == 200
         and saved.json()["llm"]["has_api_key"] is True
+        and saved.json()["llm"]["api_key_masked"] == "••••••••"
         and "sk-test" not in saved.text
     )
+    # A key for one provider must not be carried over to a new provider's endpoint.
+    switched = await client.patch("/api/settings", json={"llm_provider": "gemini"})
+    assert switched.status_code == 200 and switched.json()["llm"]["has_api_key"] is False
+    saved_again = await client.patch("/api/settings", json={"llm_api_key": "gemini-test-secret"})
+    assert saved_again.status_code == 200 and saved_again.json()["llm"]["has_api_key"] is True
+    cleared = await client.patch("/api/settings", json={"clear_llm_api_key": True, "llm_provider": "none"})
+    assert cleared.status_code == 200 and cleared.json()["llm"]["has_api_key"] is False
+    unused_key = await client.patch("/api/settings", json={"llm_api_key": "unused-secret"})
     assert (
-        await client.patch("/api/settings", json={"clear_llm_api_key": True, "llm_provider": "none"})
-    ).json()["llm"]["has_api_key"] is False
+        unused_key.status_code == 422
+        and "Select an organization AI provider" in unused_key.text
+        and "unused-secret" not in unused_key.text
+    )
 
     members = (await client.get("/api/settings/members")).json()
     assert len(members) == 1 and members[0]["role"] == "owner"

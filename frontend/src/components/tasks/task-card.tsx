@@ -29,7 +29,7 @@ export function AttentionBanner({ task, className }: { task: Task; className?: s
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <TaskControls task={task} sceneId={att.scene_id} />
             {task.project_id && att.scene_id ? (
-              <Link href={`/projects/${task.project_id}?scene=${att.scene_id}`} className="border border-border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:border-primary hover:text-primary">
+              <Link href={`/projects/${task.project_id}?scene=${att.scene_id}`} className="border border-border px-2.5 py-1 font-sans text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:border-primary hover:text-primary">
                 Edit scene
               </Link>
             ) : null}
@@ -50,13 +50,13 @@ export function TaskRow({ task, showControls = true, dragHandle, className }: { 
       {dragHandle}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Link href={`/tasks/${task.id}`} className="truncate font-mono text-xs font-bold text-foreground hover:text-primary">
+          <Link href={`/tasks/${task.id}`} className="truncate font-sans text-xs font-bold text-foreground hover:text-primary">
             {task.title || `Task ${shortId(task.id)}`}
           </Link>
           <StatusBadge status={task.status} />
           {task.human_control ? <span className="hud-pill text-hud-amber">HUMAN CONTROL</span> : null}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px] text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-sans text-[10px] text-muted-foreground">
           <span>{titleCase(task.kind)}</span>
           <span>{task.platform_key}</span>
           <span>P{task.priority}</span>

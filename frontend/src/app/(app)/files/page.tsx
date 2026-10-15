@@ -53,7 +53,7 @@ export default function FilesPage() {
               <iframe src={preview.preview.url} title={preview.filename} className="h-[60vh] w-full border border-border bg-background" />
             )
           ) : null}
-          {preview?.prompt ? <p className="font-mono text-[10px] text-muted-foreground">Prompt: {preview.prompt}</p> : null}
+          {preview?.prompt ? <p className="font-sans text-[10px] text-muted-foreground">Prompt: {preview.prompt}</p> : null}
         </DialogContent>
       </Dialog>
 
@@ -65,7 +65,7 @@ export default function FilesPage() {
         ) : items.length === 0 ? (
           <div className="p-3"><EmptyState icon={FileVideo} title="No files yet" description="Run a generation task; downloads are verified, renamed (scene_001.mp4 …) and listed here with metadata." /></div>
         ) : (
-          <table className="w-full font-mono text-[11px]">
+          <table className="w-full font-sans text-[11px]">
             <thead>
               <tr className="hud-label border-b border-border text-left">
                 <th className="px-3 py-2">File</th>
@@ -109,7 +109,7 @@ export default function FilesPage() {
       {files.data && files.data.total > limit ? (
         <div className="flex items-center justify-end gap-2">
           <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <span className="font-mono text-[10px] text-muted-foreground">page {page + 1} / {Math.ceil(files.data.total / limit)}</span>
+          <span className="font-sans text-[10px] text-muted-foreground">page {page + 1} / {Math.ceil(files.data.total / limit)}</span>
           <Button size="sm" variant="outline" disabled={(page + 1) * limit >= files.data.total} onClick={() => setPage((p) => p + 1)}>Next</Button>
         </div>
       ) : null}

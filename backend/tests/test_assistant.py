@@ -7,8 +7,6 @@ import pytest
 from app.services.assistant_service import parse_command
 from tests.conftest import ApiClient
 
-pytestmark = pytest.mark.asyncio
-
 
 # --------------------------------------------------------------------------- grammar (pure)
 @pytest.mark.parametrize(

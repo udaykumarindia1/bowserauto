@@ -81,7 +81,7 @@ export function MetricBar({ label, value, display, tone = "primary", max = 100 }
   }[tone];
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between font-mono text-[10px] font-bold tracking-[0.12em]">
+      <div className="flex items-center justify-between font-sans text-[10px] font-bold tracking-[0.12em]">
         <span className="text-muted-foreground">{label}</span>
         <span className={cn(value == null ? "text-muted-foreground/60" : text)}>{display ?? (value == null ? "--" : `${Math.round(value)}%`)}</span>
       </div>
@@ -100,11 +100,11 @@ export function HudClock({ className }: { className?: string }) {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  if (!now) return <div className={cn("text-right font-mono", className)}>--:--:--</div>;
+  if (!now) return <div className={cn("text-right font-sans", className)}>--:--:--</div>;
   const time = now.toLocaleTimeString(undefined, { hour12: false });
   const date = now.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).toUpperCase();
   return (
-    <div className={cn("text-right font-mono", className)}>
+    <div className={cn("text-right font-sans", className)}>
       <div className="hud-glow text-base font-bold leading-none tracking-[0.12em] text-primary">{time}</div>
       <div className="mt-1 text-[9px] tracking-[0.2em] text-muted-foreground">{date}</div>
     </div>
@@ -115,7 +115,7 @@ export function HudClock({ className }: { className?: string }) {
 export function HudBadge({ top, bottom, tone = "primary", className }: { top: string; bottom: string; tone?: "primary" | "green" | "dim" | "amber" | "red"; className?: string }) {
   const colour = { primary: "text-primary", green: "text-hud-green", dim: "text-muted-foreground", amber: "text-hud-amber", red: "text-hud-red" }[tone];
   return (
-    <div className={cn("border border-hud-a bg-hud-panel2 px-2 py-1.5 text-center font-mono text-[9px] font-bold leading-tight tracking-[0.14em]", colour, className)}>
+    <div className={cn("border border-hud-a bg-hud-panel2 px-2 py-1.5 text-center font-sans text-[9px] font-bold leading-tight tracking-[0.14em]", colour, className)}>
       <div>{top}</div>
       <div>{bottom}</div>
     </div>

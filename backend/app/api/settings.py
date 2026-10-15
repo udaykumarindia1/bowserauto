@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import time
 import uuid
 from typing import Annotated
 
@@ -9,6 +11,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
+from app.agent.llm import LLMMessage, LLMUnavailable, build_llm_client, llm_status
 from app.core.config import get_settings
 from app.core.deps import DB, CurrentAuth, require_role
 from app.core.errors import ConflictError, NotFoundError, ValidationFailed
@@ -17,8 +20,14 @@ from app.notifications import configured_channels
 from app.realtime.bus import get_bus
 from app.schemas import OrganizationOut, OrgSettingsOut, OrgSettingsUpdate
 from app.services.audit import audit
-from app.services.org_settings import effective_limits, llm_settings_view, update_org_settings
+from app.services.org_settings import (
+    effective_limits,
+    llm_overrides_for,
+    llm_settings_view,
+    update_org_settings,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 Admin = Annotated[object, Depends(require_role(OrgRole.admin.value))]
 
@@ -26,9 +35,6 @@ Admin = Annotated[object, Depends(require_role(OrgRole.admin.value))]
 def _view(auth) -> OrgSettingsOut:  # noqa: ANN001
     settings = get_settings()
     org = auth.organization
-    from app.agent.llm import build_llm_client
-    from app.services.org_settings import llm_overrides_for
-
     llm = build_llm_client(llm_overrides_for(org))
     return OrgSettingsOut(
         organization=OrganizationOut.model_validate(org),
@@ -41,6 +47,7 @@ def _view(auth) -> OrgSettingsOut:  # noqa: ANN001
             "embedded_worker": settings.worker_is_embedded,
             "llm_active": llm is not None,
             "llm_model": getattr(llm, "model", None),
+            "agent_use_vision": settings.agent_use_vision,
             "notification_channels": ["in_app", "browser", *configured_channels()],
             "mock_platform_url": settings.effective_mock_platform_url
             if settings.app_env != "production"
@@ -87,6 +94,64 @@ class MemberIn(BaseModel):
 
 class MemberRoleIn(BaseModel):
     role: str
+
+
+@router.post("/llm/test", response_model=dict)
+async def test_llm_connection(request: Request, auth: CurrentAuth, db: DB, _: Admin) -> dict:
+    """Test the saved organisation provider without returning prompts, output, or credentials."""
+    overrides = llm_overrides_for(auth.organization)
+    config_status = llm_status(overrides)
+    provider = str(config_status.get("provider") or "none")
+    model = config_status.get("model")
+    if not config_status.get("configured"):
+        result = {
+            "ok": False,
+            "provider": provider,
+            "model": model,
+            "latency_ms": 0,
+            "message": str(config_status.get("message") or "AI provider is not configured."),
+        }
+    else:
+        client = build_llm_client(overrides)
+        started = time.perf_counter()
+        try:
+            if client is None:
+                raise LLMUnavailable("Provider is not configured.")
+            response = await client.complete(
+                [LLMMessage("user", "Reply with the single word OK.")],
+                max_tokens=16,
+                temperature=0.0,
+            )
+            ok = bool(response.text.strip())
+            message = (
+                "Connection successful; the model returned a response."
+                if ok
+                else "The provider returned an empty response."
+            )
+        except LLMUnavailable as exc:
+            ok = False
+            message = str(exc)
+        except Exception as exc:  # keep unexpected library/network details out of the response
+            logger.warning("LLM connection test failed: provider=%s error=%s", provider, type(exc).__name__)
+            ok = False
+            message = "The provider request failed. Check the server logs and provider configuration."
+        result = {
+            "ok": ok,
+            "provider": provider,
+            "model": model,
+            "latency_ms": round((time.perf_counter() - started) * 1000),
+            "message": message,
+        }
+    await audit(
+        db,
+        "org.llm_connection_test",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        data={"provider": provider, "model": model, "ok": result["ok"]},
+    )
+    await db.commit()
+    return result
 
 
 @router.get("/members", response_model=list[dict])

@@ -14,7 +14,7 @@ export function Toaster() {
         <div
           key={t.id}
           className={cn(
-            "pointer-events-auto hud-corners border border-border bg-card p-3 font-mono text-xs shadow-lg animate-in slide-in-from-right-4",
+            "pointer-events-auto hud-corners border border-border bg-card p-3 font-sans text-xs shadow-lg animate-in slide-in-from-right-4",
             t.variant === "destructive" && "border-hud-red/60",
             t.variant === "success" && "border-hud-green/60",
             t.variant === "warning" && "border-hud-amber/60",

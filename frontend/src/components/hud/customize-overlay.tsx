@@ -112,7 +112,7 @@ export function CustomizeOverlay() {
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="border border-border px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:bg-hud-ghost" onClick={() => speak(`${assistantName || "AVINASH"} online, ${userName || "sir"}. Systems nominal.`, { voiceURI, rate })}>
+                  <button type="button" className="border border-border px-2 font-sans text-[10px] uppercase tracking-[0.12em] text-primary hover:bg-hud-ghost" onClick={() => speak(`${assistantName || "AVINASH"} online, ${userName || "sir"}. Systems nominal.`, { voiceURI, rate })}>
                     Test
                   </button>
                 </div>
@@ -122,7 +122,7 @@ export function CustomizeOverlay() {
               <label className="flex items-center gap-2 pt-1 text-[11px]">
                 <span className="hud-label">Rate</span>
                 <input type="range" min={0.7} max={1.4} step={0.02} value={rate} onChange={(e) => setRate(Number(e.target.value))} className="flex-1" />
-                <span className="w-10 text-right font-mono text-[10px]">{rate.toFixed(2)}×</span>
+                <span className="w-10 text-right font-sans text-[10px]">{rate.toFixed(2)}×</span>
               </label>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -137,7 +137,7 @@ export function CustomizeOverlay() {
               <span className="hud-label">HUD centrepiece</span>
               <div className="grid grid-cols-2 gap-2">
                 {(["core", "minimal"] as const).map((style) => (
-                  <button key={style} type="button" onClick={() => setHudStyle(style)} className={cn("border px-2 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]", hudStyle === style ? "border-primary bg-hud-ghost text-primary" : "border-border text-muted-foreground hover:text-primary")}>
+                  <button key={style} type="button" onClick={() => setHudStyle(style)} className={cn("border px-2 py-1.5 font-sans text-[10px] font-bold uppercase tracking-[0.14em]", hudStyle === style ? "border-primary bg-hud-ghost text-primary" : "border-border text-muted-foreground hover:text-primary")}>
                     {style === "core" ? "Reactor core" : "Minimal"}
                   </button>
                 ))}
@@ -150,7 +150,7 @@ export function CustomizeOverlay() {
               <span className="hud-label">UI colour — drag the handle</span>
               <button
                 type="button"
-                className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground hover:text-primary"
+                className="font-sans text-[9px] uppercase tracking-[0.12em] text-muted-foreground hover:text-primary"
                 onClick={() => {
                   setHex(DEFAULT_ACCENT);
                   applyAccent(DEFAULT_ACCENT, { persist: false });
@@ -210,7 +210,7 @@ export function CustomizeOverlay() {
         <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
           <button
             type="button"
-            className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-hud-red"
+            className="font-sans text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-hud-red"
             onClick={() => {
               setAssistantName(DEFAULT_PREFS.assistantName);
               setUserName("");
@@ -222,10 +222,10 @@ export function CustomizeOverlay() {
             Reset all
           </button>
           <div className="flex gap-2">
-            <button type="button" onClick={cancel} className="border border-border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:text-primary">
+            <button type="button" onClick={cancel} className="border border-border px-3 py-1.5 font-sans text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:text-primary">
               Cancel
             </button>
-            <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className="border border-primary bg-hud-ghost px-4 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50">
+            <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className="border border-primary bg-hud-ghost px-4 py-1.5 font-sans text-[10px] font-bold uppercase tracking-[0.14em] text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50">
               {save.isPending ? "Saving…" : "Save"}
             </button>
             <button type="button" onClick={() => controller.say(`Testing voice, ${userName || "sir"}.`)} className="hidden" aria-hidden />

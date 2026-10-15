@@ -2,7 +2,7 @@
 
 The authoritative, always-current contract is the OpenAPI document served by the backend:
 `GET /api/openapi.json` and the interactive docs at `/api/docs`. This page summarises the
-surface (100 operations) and the conventions.
+surface (101 operations) and the conventions.
 
 ## Conventions
 
@@ -66,7 +66,9 @@ target_duration_seconds?}` · `GET /projects/{id}/estimate` · `GET /projects/{i
 * `/platforms`, `GET /platforms/{key}`, `POST /platforms/{key}/enabled {enabled}` (admin).
 * `/templates` CRUD (built-ins are read-only).
 * `GET/PATCH /settings` (`name, settings{notifications,defaults,ui,platforms}, llm_provider,
-  llm_model, llm_base_url, llm_api_key, clear_llm_api_key, limits{}`), `/settings/members` CRUD.
+  llm_model, llm_base_url, llm_api_key, clear_llm_api_key, limits{}`), admin-only
+  `POST /settings/llm/test` (small provider health check; does not expose output or credentials),
+  `/settings/members` CRUD. See [LLM provider configuration](LLM_PROVIDERS.md).
 * `GET /dashboard`, `GET /activity?level&event_type&task_id&project_id&before&limit`,
   `GET /audit` (admin), `/notifications` (+`/read`), `GET /health`.
 

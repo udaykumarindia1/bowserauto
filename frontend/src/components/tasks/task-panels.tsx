@@ -26,7 +26,7 @@ export function ActivityLog({ taskId, className }: { taskId: string; className?:
   if (activity.isLoading) return <Skeleton className="h-40" />;
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      <div ref={ref} onScroll={(e) => { const el = e.currentTarget; setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }} className="min-h-0 flex-1 overflow-y-auto font-mono text-[11px]">
+      <div ref={ref} onScroll={(e) => { const el = e.currentTarget; setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }} className="min-h-0 flex-1 overflow-y-auto font-sans text-[11px]">
         {items.length === 0 ? <p className="p-3 text-muted-foreground">No activity yet.</p> : null}
         {items.map((a: ActivityEntry) => (
           <div key={a.id} className="flex gap-2 border-b border-border/50 px-2 py-1 hover:bg-hud-ghost">
@@ -62,8 +62,8 @@ export function AgentDecisions({ taskId, className }: { taskId: string; classNam
             <button type="button" onClick={() => setOpen({ ...open, [run.id]: !expanded })} className="flex w-full items-start gap-2 px-2 py-1.5 text-left hover:bg-hud-ghost">
               {expanded ? <ChevronDown className="mt-0.5 h-3 w-3 shrink-0 text-primary" /> : <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />}
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-[11px] font-bold">{run.goal || "Agent run"}</p>
-                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+                <p className="truncate font-sans text-[11px] font-bold">{run.goal || "Agent run"}</p>
+                <p className="font-sans text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
                   {run.mode} · {run.model || "heuristic"} · {run.actions.length} action(s) {run.started_at ? `· ${timeAgo(run.started_at)}` : ""}
                 </p>
               </div>
@@ -74,7 +74,7 @@ export function AgentDecisions({ taskId, className }: { taskId: string; classNam
                 {run.actions.map((a) => (
                   <li key={a.id} className="flex gap-2 border-b border-border/40 px-2 py-1.5 last:border-b-0">
                     {a.success ? <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-hud-green" /> : <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-hud-red" />}
-                    <div className="min-w-0 flex-1 font-mono text-[11px]">
+                    <div className="min-w-0 flex-1 font-sans text-[11px]">
                       <p>
                         <span className="text-primary">{a.tool}</span>
                         <span className="text-muted-foreground"> {truncate(JSON.stringify(a.arguments ?? {}), 120)}</span>
@@ -85,8 +85,8 @@ export function AgentDecisions({ taskId, className }: { taskId: string; classNam
                     <span className="shrink-0 text-[9px] text-muted-foreground">{a.duration_ms ? `${a.duration_ms} ms` : ""}</span>
                   </li>
                 ))}
-                {run.summary ? <li className="px-2 py-1.5 font-mono text-[11px] text-hud-green">{run.summary}</li> : null}
-                {run.error ? <li className="px-2 py-1.5 font-mono text-[11px] text-hud-red">{run.error}</li> : null}
+                {run.summary ? <li className="px-2 py-1.5 font-sans text-[11px] text-hud-green">{run.summary}</li> : null}
+                {run.error ? <li className="px-2 py-1.5 font-sans text-[11px] text-hud-red">{run.error}</li> : null}
               </ol>
             ) : null}
           </div>
@@ -109,7 +109,7 @@ export function ScreenshotHistory({ taskId, className }: { taskId: string; class
         <button key={s.id} type="button" onClick={() => setActive(s)} className="group border border-border text-left hover:border-primary">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={s.image.url} alt={s.stage} loading="lazy" className="aspect-video w-full bg-black object-cover object-top" />
-          <div className="px-1.5 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground group-hover:text-primary">
+          <div className="px-1.5 py-1 font-sans text-[9px] uppercase tracking-[0.1em] text-muted-foreground group-hover:text-primary">
             <p className="truncate">{s.stage}</p>
             <p className="truncate">{formatTime(s.created_at)} · {truncate(s.title || s.url, 24)}</p>
           </div>
@@ -122,7 +122,7 @@ export function ScreenshotHistory({ taskId, className }: { taskId: string; class
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={active.image.url} alt={active.stage} className="max-h-[70vh] w-full border border-border bg-black object-contain" />
-              <p className="truncate font-mono text-[10px] text-muted-foreground">{active.title} · {active.url}</p>
+              <p className="truncate font-sans text-[10px] text-muted-foreground">{active.title} · {active.url}</p>
             </>
           ) : null}
         </DialogContent>
@@ -148,13 +148,13 @@ export function SceneProgress({ scenes, steps, currentSceneId, projectId, classN
         return (
           <li key={scene.id} className={cn("px-2 py-1.5", current && "bg-hud-ghost")}>
             <div className="flex items-center gap-2">
-              <span className={cn("font-mono text-[10px] font-bold", current ? "text-primary" : "text-muted-foreground")}>{scene.code}</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{scene.title || truncate(scene.prompt, 60)}</span>
+              <span className={cn("font-sans text-[10px] font-bold", current ? "text-primary" : "text-muted-foreground")}>{scene.code}</span>
+              <span className="min-w-0 flex-1 truncate font-sans text-[11px]">{scene.title || truncate(scene.prompt, 60)}</span>
               {scene.retry_count ? <span className="hud-pill text-hud-amber">retry {scene.retry_count}</span> : null}
               <StatusBadge status={scene.status} />
             </div>
             {(current || scene.last_error) && (
-              <p className={cn("mt-0.5 truncate font-mono text-[10px]", scene.last_error ? "text-hud-red" : "text-muted-foreground")}>
+              <p className={cn("mt-0.5 truncate font-sans text-[10px]", scene.last_error ? "text-hud-red" : "text-muted-foreground")}>
                 {scene.last_error || (last ? `${last.name} · ${last.status}` : "")}
               </p>
             )}
@@ -171,9 +171,9 @@ export function SceneProgress({ scenes, steps, currentSceneId, projectId, classN
 
 /** Step timeline (adapter steps like open_platform, verify_session, upload_refs, generate, download…). */
 export function StepTimeline({ steps, className }: { steps: TaskStep[]; className?: string }) {
-  if (!steps.length) return <p className="p-3 font-mono text-[11px] text-muted-foreground">No steps recorded yet.</p>;
+  if (!steps.length) return <p className="p-3 font-sans text-[11px] text-muted-foreground">No steps recorded yet.</p>;
   return (
-    <ol className={cn("divide-y divide-border font-mono text-[11px]", className)}>
+    <ol className={cn("divide-y divide-border font-sans text-[11px]", className)}>
       {steps.map((st) => (
         <li key={st.id} className="flex items-center gap-2 px-2 py-1">
           <span className="w-5 text-[9px] text-muted-foreground">{st.index}</span>

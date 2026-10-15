@@ -23,6 +23,7 @@ import type {
   GeneratedFile,
   Member,
   Notification,
+  LLMConnectionTest,
   OrgSettings,
   Platform,
   Project,
@@ -283,6 +284,7 @@ export const api = {
   settings: {
     get: () => get<OrgSettings>("/api/settings"),
     update: (body: Record<string, unknown>) => patch<OrgSettings>("/api/settings", body),
+    testLlm: () => post<LLMConnectionTest>("/api/settings/llm/test"),
     members: {
       list: () => get<Member[]>("/api/settings/members"),
       add: (email: string, role: string) => post<Member>("/api/settings/members", { email, role }),

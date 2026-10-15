@@ -105,7 +105,7 @@ export default function TemplatesPage() {
             return (
               <HudPanel key={t.id} corners title={<span className="flex items-center gap-2"><Icon className="h-3.5 w-3.5 text-primary" /> {t.name}</span>} actions={<HudPill tone={t.is_builtin ? "dim" : "default"}>{t.is_builtin ? "built-in" : "custom"}</HudPill>}>
                 <p className="min-h-[2.5rem] text-[11px] text-muted-foreground">{t.description}</p>
-                <p className="mt-2 font-mono text-[10px] text-muted-foreground">{titleCase(t.kind)} · platform {(t.config.platform_key as string) ?? "generic"}</p>
+                <p className="mt-2 font-sans text-[10px] text-muted-foreground">{titleCase(t.kind)} · platform {(t.config.platform_key as string) ?? "generic"}</p>
                 <div className="mt-3 flex items-center gap-1.5">
                   <Link href={`/new-task?template=${t.key}`}><Button size="sm">Use template</Button></Link>
                   {writable && !t.is_builtin ? (

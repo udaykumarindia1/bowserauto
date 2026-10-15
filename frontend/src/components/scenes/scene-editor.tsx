@@ -52,11 +52,11 @@ export function SceneList({ scenes, selectedId, onSelect, projectId, canWrite, l
             ) : null}
             <button type="button" onClick={() => onSelect(s.id)} className="min-w-0 flex-1 text-left">
               <div className="flex items-center gap-2">
-                <span className={cn("font-mono text-[10px] font-bold", selectedId === s.id ? "text-primary" : "text-muted-foreground")}>{s.code}</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{s.title || truncate(s.prompt, 50) || "Untitled scene"}</span>
+                <span className={cn("font-sans text-[10px] font-bold", selectedId === s.id ? "text-primary" : "text-muted-foreground")}>{s.code}</span>
+                <span className="min-w-0 flex-1 truncate font-sans text-[11px]">{s.title || truncate(s.prompt, 50) || "Untitled scene"}</span>
                 <StatusBadge status={s.status} />
               </div>
-              <p className="truncate font-mono text-[9px] text-muted-foreground">{s.duration_seconds}s · {s.platform_key ?? "project default"}{s.reference_asset_ids.length ? ` · ${s.reference_asset_ids.length} ref` : ""}{s.last_error ? ` · ⚠ ${s.last_error}` : ""}</p>
+              <p className="truncate font-sans text-[9px] text-muted-foreground">{s.duration_seconds}s · {s.platform_key ?? "project default"}{s.reference_asset_ids.length ? ` · ${s.reference_asset_ids.length} ref` : ""}{s.last_error ? ` · ⚠ ${s.last_error}` : ""}</p>
             </button>
             {editable ? (
               <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
@@ -116,7 +116,7 @@ export function SceneForm({ scene, projectId, platforms, assets, canWrite, locke
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm font-bold text-primary">{scene.code}</span>
+        <span className="font-sans text-sm font-bold text-primary">{scene.code}</span>
         <StatusBadge status={scene.status} />
         {scene.retry_count ? <span className="hud-pill text-hud-amber">retries {scene.retry_count}</span> : null}
         <span className="flex-1" />
@@ -129,8 +129,8 @@ export function SceneForm({ scene, projectId, platforms, assets, canWrite, locke
           </>
         ) : null}
       </div>
-      {locked ? <p className="border border-hud-amber/50 bg-hud-amber/10 px-2 py-1 font-mono text-[10px] text-hud-amber">A task is running on this project — scenes are read-only until it pauses or finishes.</p> : null}
-      {scene.last_error ? <p className="border border-hud-red/50 bg-hud-red/10 px-2 py-1 font-mono text-[10px] text-hud-red">{scene.last_error}</p> : null}
+      {locked ? <p className="border border-hud-amber/50 bg-hud-amber/10 px-2 py-1 font-sans text-[10px] text-hud-amber">A task is running on this project — scenes are read-only until it pauses or finishes.</p> : null}
+      {scene.last_error ? <p className="border border-hud-red/50 bg-hud-red/10 px-2 py-1 font-sans text-[10px] text-hud-red">{scene.last_error}</p> : null}
 
       <div className="grid gap-3 md:grid-cols-[1fr_120px_200px]">
         <div className="space-y-1"><Label>Title</Label><Input disabled={!editable} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></div>
@@ -157,13 +157,13 @@ export function SceneForm({ scene, projectId, platforms, assets, canWrite, locke
       <div className="space-y-1">
         <Label>Reference images</Label>
         {images.length === 0 ? (
-          <p className="font-mono text-[10px] text-muted-foreground">Upload reference images in the References tab to attach them here.</p>
+          <p className="font-sans text-[10px] text-muted-foreground">Upload reference images in the References tab to attach them here.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {images.map((a) => {
               const on = draft.reference_asset_ids.includes(a.id);
               return (
-                <button key={a.id} type="button" disabled={!editable} onClick={() => setDraft({ ...draft, reference_asset_ids: on ? draft.reference_asset_ids.filter((x) => x !== a.id) : [...draft.reference_asset_ids, a.id] })} className={cn("flex items-center gap-1.5 border px-2 py-1 font-mono text-[10px]", on ? "border-primary bg-hud-ghost text-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
+                <button key={a.id} type="button" disabled={!editable} onClick={() => setDraft({ ...draft, reference_asset_ids: on ? draft.reference_asset_ids.filter((x) => x !== a.id) : [...draft.reference_asset_ids, a.id] })} className={cn("flex items-center gap-1.5 border px-2 py-1 font-sans text-[10px]", on ? "border-primary bg-hud-ghost text-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
                   <ImageIcon className="h-3 w-3" /> {truncate(a.filename, 24)}
                 </button>
               );

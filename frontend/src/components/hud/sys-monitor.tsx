@@ -41,7 +41,7 @@ export function SysMonitor({ className }: { className?: string }) {
       <MetricBar label="TMP" value={temp} tone="red" display={temp == null ? "--" : `${temp.toFixed(0)}°C`} max={100} />
       <MetricBar label="WRK" value={workersMax ? (running / workersMax) * 100 : 0} tone="primary" display={`${running}/${workersMax}`} />
 
-      <div className="space-y-1 border border-border bg-hud-panel2 px-2 py-1.5 font-mono text-[10px] font-bold tracking-[0.1em]">
+      <div className="space-y-1 border border-border bg-hud-panel2 px-2 py-1.5 font-sans text-[10px] font-bold tracking-[0.1em]">
         <div className="text-hud-green">UP&nbsp;&nbsp;{data?.uptime_seconds != null ? formatDuration(data.uptime_seconds) : "--:--"}</div>
         <div className="text-hud-med">API&nbsp;{data ? formatDuration(data.process_uptime_seconds) : "--"}</div>
         <div className="text-hud-med">PROC&nbsp;{data?.process_count ?? "--"}</div>

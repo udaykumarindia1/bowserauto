@@ -56,7 +56,7 @@ export default function SessionPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/sessions" className="hud-label flex items-center gap-1 hover:text-primary"><ArrowLeft className="h-3 w-3" /> Sessions</Link>
         <span className="text-border">/</span>
-        <h1 className="min-w-0 flex-1 truncate font-mono text-sm font-bold uppercase tracking-[0.15em] text-primary">{s.name}</h1>
+        <h1 className="min-w-0 flex-1 truncate font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary">{s.name}</h1>
         <HudPill tone="dim">{s.platform_key}</HudPill>
         <HudPill tone={s.login_status === "logged_in" ? "green" : s.login_status === "logged_out" ? "amber" : "dim"}>{s.login_status.replace("_", " ")}</HudPill>
         <StatusBadge status={s.status} />
@@ -98,7 +98,7 @@ export default function SessionPage() {
           </HudPanel>
 
           <HudPanel title="DETAILS">
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-[10px]">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-sans text-[10px]">
               <dt className="text-muted-foreground">Browser</dt><dd>{s.browser_type}</dd>
               <dt className="text-muted-foreground">Worker</dt><dd>{s.worker_id ? s.worker_id.slice(0, 12) : "—"}</dd>
               <dt className="text-muted-foreground">Heartbeat</dt><dd>{s.last_heartbeat_at ? timeAgo(s.last_heartbeat_at) : "—"}</dd>
@@ -128,7 +128,7 @@ export default function SessionPage() {
                   <a key={sh.id} href={sh.image.url} target="_blank" rel="noreferrer" className="border border-border hover:border-primary">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={sh.image.url} alt={sh.stage} loading="lazy" className="aspect-video w-full bg-black object-cover object-top" />
-                    <p className="truncate px-1 py-0.5 font-mono text-[9px] text-muted-foreground">{formatTime(sh.created_at)} · {sh.stage}</p>
+                    <p className="truncate px-1 py-0.5 font-sans text-[9px] text-muted-foreground">{formatTime(sh.created_at)} · {sh.stage}</p>
                   </a>
                 ))}
               </div>

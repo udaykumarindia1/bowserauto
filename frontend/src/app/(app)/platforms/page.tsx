@@ -50,9 +50,9 @@ export default function PlatformsPage() {
                     <HudPill tone={p.adapter_available ? "default" : "orange"}>{p.adapter_available ? "dedicated adapter" : "generic agent"}</HudPill>
                     {p.requires_login ? <HudPill tone="amber"><ShieldCheck className="h-3 w-3" /> manual login</HudPill> : null}
                   </div>
-                  {p.supported_actions?.length ? <p className="font-mono text-[10px] text-muted-foreground">actions: {p.supported_actions.join(", ")}</p> : null}
-                  {p.notes ? <p className="font-mono text-[10px] text-hud-amber">{p.notes}</p> : null}
-                  <div className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
+                  {p.supported_actions?.length ? <p className="font-sans text-[10px] text-muted-foreground">actions: {p.supported_actions.join(", ")}</p> : null}
+                  {p.notes ? <p className="font-sans text-[10px] text-hud-amber">{p.notes}</p> : null}
+                  <div className="flex items-center justify-between font-sans text-[10px] text-muted-foreground">
                     <span>{sess.length} session(s) · {loggedIn} logged in</span>
                     {p.base_url ? <a href={p.base_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-primary">{p.base_url.replace(/^https?:\/\//, "").slice(0, 28)} <ExternalLink className="h-3 w-3" /></a> : null}
                   </div>

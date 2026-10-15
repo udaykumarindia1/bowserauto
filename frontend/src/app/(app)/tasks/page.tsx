@@ -93,7 +93,7 @@ function TasksView() {
             {f.label}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">{tasks.data ? `${tasks.data.total} task(s)` : ""}</span>
+        <span className="ml-auto font-sans text-[10px] text-muted-foreground">{tasks.data ? `${tasks.data.total} task(s)` : ""}</span>
       </div>
 
       <HudPanel padded={false}>
@@ -133,7 +133,7 @@ function TasksView() {
       {tasks.data && tasks.data.total > limit ? (
         <div className="flex items-center justify-end gap-2">
           <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <span className="font-mono text-[10px] text-muted-foreground">page {page + 1} / {Math.ceil(tasks.data.total / limit)}</span>
+          <span className="font-sans text-[10px] text-muted-foreground">page {page + 1} / {Math.ceil(tasks.data.total / limit)}</span>
           <Button size="sm" variant="outline" disabled={(page + 1) * limit >= tasks.data.total} onClick={() => setPage((p) => p + 1)}>Next</Button>
         </div>
       ) : null}

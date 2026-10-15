@@ -49,7 +49,7 @@ message.
 | Memory + Memory Panel, Undo | `MemoryFact` API, Settings → Memory panel, `forget …` command |
 | Real confirmation buttons for irreversible actions | `confirm` responses rendered as a banner with explicit buttons (STOP EVERYTHING, queueing agent tasks, clearing memory) |
 | Voice picker, assistant name, colour customisation | Customise overlay (voice, rate, names, hue wheel/hex) |
-| Model ladder (Gemini fallbacks) | server-side LLM provider abstraction (`LLM_PROVIDER` none/openai-compatible/anthropic) with heuristic fallback |
+| Model/provider selection | Server-side multi-provider abstraction: OpenAI-compatible presets, native Gemini/Ollama/Anthropic, plus heuristic fallback |
 | Hardware monitoring | SYS MONITOR panel from `/api/assistant/system` |
 | Morning briefing / proactive check-ins | `GET /api/assistant/briefing` on login; proactive console notices for `task.attention`, `human.required`, failures, completions (browser notifications optional) |
 | Autonomous agent tasks, browser control, file processor | the core product: task queue, browser agent, sessions, generated files |

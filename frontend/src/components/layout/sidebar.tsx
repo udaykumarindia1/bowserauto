@@ -26,8 +26,8 @@ export function Sidebar({ attention = 0 }: { attention?: number }) {
   const pathname = usePathname();
   const monitorOpen = useJarvis((s) => s.monitorOpen);
   return (
-    <aside className={cn("flex h-full shrink-0 flex-col border-r border-border bg-hud-dark transition-[width] duration-200", monitorOpen ? "w-56" : "w-16")} aria-label="Navigation">
-      <nav className="shrink-0 space-y-0.5 p-2">
+    <aside className={cn("flex h-full shrink-0 flex-col border-r border-border/70 bg-card/65 transition-[width] duration-200", monitorOpen ? "w-56" : "w-16")} aria-label="Navigation">
+      <nav className="shrink-0 space-y-1 p-2">
         {NAV.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -36,8 +36,8 @@ export function Sidebar({ attention = 0 }: { attention?: number }) {
               href={item.href}
               title={item.label}
               className={cn(
-                "group flex items-center gap-2 border border-transparent px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-border hover:bg-hud-ghost hover:text-primary",
-                active && "border-primary/50 bg-hud-ghost text-primary shadow-[inset_2px_0_0_hsl(var(--hud-pri))]",
+                "group relative flex items-center gap-2 rounded-xl border border-transparent px-2.5 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                active && "border-primary/15 bg-primary/10 font-semibold text-primary",
                 !monitorOpen && "justify-center px-0",
               )}
             >
@@ -56,7 +56,7 @@ export function Sidebar({ attention = 0 }: { attention?: number }) {
         </div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-end gap-1 border-t border-border p-2">
-          <span className="[writing-mode:vertical-rl] rotate-180 font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">sys monitor hidden</span>
+          <span className="[writing-mode:vertical-rl] rotate-180 font-sans text-[9px] uppercase tracking-[0.3em] text-muted-foreground">sys monitor hidden</span>
         </div>
       )}
     </aside>

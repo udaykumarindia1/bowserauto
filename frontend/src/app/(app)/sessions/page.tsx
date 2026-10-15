@@ -48,7 +48,7 @@ function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           </div>
           <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={`${platform?.name ?? "Browser"} session`} /></div>
           <div className="space-y-1"><Label>Start URL (optional)</Label><Input value={form.start_url} onChange={(e) => setForm({ ...form, start_url: e.target.value })} placeholder={platform?.start_url || platform?.base_url || "https://"} /></div>
-          <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]"><input type="checkbox" className="accent-primary" checked={form.open} onChange={(e) => setForm({ ...form, open: e.target.checked })} /> Launch the browser now</label>
+          <label className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em]"><input type="checkbox" className="accent-primary" checked={form.open} onChange={(e) => setForm({ ...form, open: e.target.checked })} /> Launch the browser now</label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -90,12 +90,12 @@ export default function SessionsPage() {
                 <div className="flex items-start gap-2">
                   <span className={cn("hud-dot mt-1.5", live ? "bg-hud-green text-hud-green" : s.status === "launching" ? "bg-hud-amber text-hud-amber animate-blink" : s.status === "error" ? "bg-hud-red text-hud-red" : "bg-muted-foreground text-muted-foreground")} />
                   <div className="min-w-0 flex-1">
-                    <Link href={`/sessions/${s.id}`} className="block truncate font-mono text-xs font-bold uppercase tracking-[0.1em] hover:text-primary">{s.name}</Link>
+                    <Link href={`/sessions/${s.id}`} className="block truncate font-sans text-xs font-bold uppercase tracking-[0.1em] hover:text-primary">{s.name}</Link>
                     <p className="hud-label">{s.platform_key} · {s.browser_type}</p>
                   </div>
                   <StatusBadge status={s.status} />
                 </div>
-                <div className="font-mono text-[10px] text-muted-foreground">
+                <div className="font-sans text-[10px] text-muted-foreground">
                   <p className="flex items-center gap-1"><LogIn className="h-3 w-3" /> {s.login_status.replace("_", " ")}{s.interactive ? " · human control" : ""}{s.locked_by_task_id ? " · locked by task" : ""}</p>
                   <p className="truncate" title={s.current_url}>{s.current_url ? truncate(s.current_url, 48) : s.start_url ? `start: ${truncate(s.start_url, 40)}` : "no page open"}</p>
                   <p>{s.last_used_at ? `used ${timeAgo(s.last_used_at)}` : `created ${timeAgo(s.created_at)}`}{s.error ? ` · ⚠ ${truncate(s.error, 40)}` : ""}</p>

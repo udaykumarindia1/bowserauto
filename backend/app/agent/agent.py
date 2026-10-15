@@ -95,7 +95,7 @@ class BrowserAgent:
                 decision = self.planner.plan(goal, inputs, snapshot, history)
             tool_name = decision.get("tool", "")
             args = decision.get("args") or {}
-            reasoning = str(decision.get("reasoning", ""))[:300]
+            reasoning = str(redact(str(decision.get("reasoning", ""))))[:300]
             signature = (tool_name, json.dumps(args, sort_keys=True, default=str))
             repeats = repeats + 1 if signature == last_signature else 0
             last_signature = signature
@@ -158,17 +158,18 @@ class BrowserAgent:
         )
         try:
             decision = response.json()
-        except ValueError:
-            logger.warning("LLM returned non-JSON decision: %s", response.text[:200])
-            return {
-                "tool": "browser.wait",
-                "args": {"seconds": 2},
-                "reasoning": "Could not parse the model decision; waiting briefly.",
-            }
-        if not isinstance(decision, dict) or "tool" not in decision:
-            return {
-                "tool": "browser.wait",
-                "args": {"seconds": 2},
-                "reasoning": "Invalid decision; waiting briefly.",
-            }
+        except ValueError as exc:
+            logger.warning("LLM returned non-JSON decision: provider model=%s", response.model)
+            # The caller falls back to the deterministic planner on LLMUnavailable. Do not spend
+            # browser time on a blind delay when the model response cannot be interpreted.
+            raise LLMUnavailable("The model did not return a valid tool-call JSON object") from exc
+        if (
+            not isinstance(decision, dict)
+            or not isinstance(decision.get("tool"), str)
+            or not decision["tool"].strip()
+            or not isinstance(decision.get("args", {}), dict)
+            or not isinstance(decision.get("reasoning", ""), str)
+        ):
+            logger.warning("LLM returned an invalid tool-call object: provider model=%s", response.model)
+            raise LLMUnavailable("The model returned an invalid tool-call object")
         return decision

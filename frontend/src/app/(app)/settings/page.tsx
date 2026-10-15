@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, KeyRound, Trash2 } from "lucide-react";
+import { BellRing, Trash2 } from "lucide-react";
 
+import { LLMSettingsPanel } from "@/components/settings/llm-settings-panel";
 import { MemoryPanel } from "@/components/hud/memory-panel";
 import { HudPanel, HudPill } from "@/components/hud/hud-primitives";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ function ProfileTab() {
         <div className="space-y-1"><Label>Email</Label><Input value={user?.email ?? ""} disabled /></div>
         <div className="space-y-1"><Label>Full name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <Button size="sm" disabled={name.trim() === (user?.full_name ?? "")} loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
-        <p className="font-mono text-[10px] text-muted-foreground">Assistant name, voice, colours and HUD style live in the ⚙ customise panel (top bar).</p>
+        <p className="font-sans text-[10px] text-muted-foreground">Assistant name, voice, colours and HUD style live in the ⚙ customise panel (top bar).</p>
       </div>
     </HudPanel>
   );
@@ -86,7 +87,7 @@ function NotificationsTab({ settings, admin }: { settings: OrgSettings; admin: b
           <Button size="sm" variant={enabled ? "outline" : "default"} onClick={toggleBrowser} disabled={perm === "unsupported" || perm === "denied"}><BellRing /> {enabled ? "Disable" : "Enable"}</Button>
           <HudPill tone={perm === "granted" ? "green" : perm === "denied" ? "red" : "dim"}>{perm === "unsupported" ? "unsupported" : `permission: ${perm}`}</HudPill>
         </div>
-        {perm === "denied" ? <p className="mt-2 font-mono text-[10px] text-hud-amber">Notifications are blocked for this site in your browser settings.</p> : null}
+        {perm === "denied" ? <p className="mt-2 font-sans text-[10px] text-hud-amber">Notifications are blocked for this site in your browser settings.</p> : null}
       </HudPanel>
       <HudPanel title="CHANNELS" corners>
         <div className="flex flex-wrap gap-1.5">
@@ -94,17 +95,17 @@ function NotificationsTab({ settings, admin }: { settings: OrgSettings; admin: b
             <HudPill key={c} tone={channels.includes(c) ? "green" : "dim"}>{c.replace("_", " ")} · {channels.includes(c) ? "active" : "not configured"}</HudPill>
           ))}
         </div>
-        <p className="mt-2 font-mono text-[10px] text-muted-foreground">Email (SMTP_*), Telegram (TELEGRAM_BOT_TOKEN / CHAT_ID) and generic webhook (WhatsApp gateways, Slack) are enabled through server environment variables — no secrets are entered in the UI.</p>
+        <p className="mt-2 font-sans text-[10px] text-muted-foreground">Email (SMTP_*), Telegram (TELEGRAM_BOT_TOKEN / CHAT_ID) and generic webhook (WhatsApp gateways, Slack) are enabled through server environment variables — no secrets are entered in the UI.</p>
       </HudPanel>
       <HudPanel title="EVENTS" corners className="lg:col-span-2">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Object.keys(prefs).map((k) => (
-            <label key={k} className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]">
+            <label key={k} className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em]">
               <input type="checkbox" className="accent-primary" disabled={!admin} checked={prefs[k]} onChange={(e) => setPrefs({ ...prefs, [k]: e.target.checked })} /> {titleCase(k)}
             </label>
           ))}
         </div>
-        {admin ? <Button size="sm" className="mt-3" loading={save.isPending} onClick={() => save.mutate()}>Save</Button> : <p className="mt-2 font-mono text-[10px] text-muted-foreground">Only admins can change organisation-wide preferences.</p>}
+        {admin ? <Button size="sm" className="mt-3" loading={save.isPending} onClick={() => save.mutate()}>Save</Button> : <p className="mt-2 font-sans text-[10px] text-muted-foreground">Only admins can change organisation-wide preferences.</p>}
       </HudPanel>
     </div>
   );
@@ -114,19 +115,13 @@ function OrganisationTab({ settings }: { settings: OrgSettings }) {
   const queryClient = useQueryClient();
   const { refresh } = useAuth();
   const [name, setName] = React.useState(settings.organization.name);
-  const [llm, setLlm] = React.useState({ provider: settings.llm.provider, model: settings.llm.model ?? "", base_url: settings.llm.base_url ?? "", api_key: "", clear: false });
   const [limits, setLimits] = React.useState<Record<string, string>>(Object.fromEntries(Object.keys(LIMIT_LABELS).map((k) => [k, settings.limits[k] != null ? String(settings.limits[k]) : ""])));
   const save = useMutation({
     mutationFn: () => api.settings.update({
       name: name.trim() || undefined,
-      llm_provider: llm.provider,
-      llm_model: llm.model,
-      llm_base_url: llm.base_url,
-      llm_api_key: llm.api_key || undefined,
-      clear_llm_api_key: llm.clear,
       limits: Object.fromEntries(Object.entries(limits).map(([k, v]) => [k, v === "" ? null : Number(v)])),
     }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["settings"] }); refresh(); setLlm((l) => ({ ...l, api_key: "", clear: false })); toast({ title: "Organisation settings saved", variant: "success" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["settings"] }); refresh(); toast({ title: "Organisation settings saved", variant: "success" }); },
     onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
   const sys = settings.system.system_limits as Record<string, number> | undefined;
@@ -135,34 +130,10 @@ function OrganisationTab({ settings }: { settings: OrgSettings }) {
       <HudPanel title="ORGANISATION" corners>
         <div className="space-y-3">
           <div className="space-y-1"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-          <p className="font-mono text-[10px] text-muted-foreground">slug {settings.organization.slug} · id {settings.organization.id.slice(0, 8)}</p>
+          <p className="font-sans text-[10px] text-muted-foreground">slug {settings.organization.slug} · id {settings.organization.id.slice(0, 8)}</p>
         </div>
       </HudPanel>
-      <HudPanel title="AI MODEL (LLM)" corners>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Provider</Label>
-              <Select value={llm.provider} onChange={(e) => setLlm({ ...llm, provider: e.target.value })}>
-                <option value="inherit">Server default ({settings.llm.effective_provider ?? "none"})</option>
-                <option value="none">None (heuristic planner)</option>
-                <option value="openai">OpenAI-compatible</option>
-                <option value="anthropic">Anthropic</option>
-              </Select>
-            </div>
-            <div className="space-y-1"><Label>Model</Label><Input value={llm.model} onChange={(e) => setLlm({ ...llm, model: e.target.value })} placeholder="gpt-4o-mini / claude-3-5-sonnet" /></div>
-          </div>
-          <div className="space-y-1"><Label>Base URL (optional, OpenAI-compatible)</Label><Input value={llm.base_url} onChange={(e) => setLlm({ ...llm, base_url: e.target.value })} placeholder="https://api.openai.com/v1" /></div>
-          <div className="space-y-1">
-            <Label>API key {settings.llm.has_api_key ? "· stored (encrypted)" : "· not set"}</Label>
-            <div className="flex gap-1.5">
-              <Input type="password" autoComplete="off" value={llm.api_key} onChange={(e) => setLlm({ ...llm, api_key: e.target.value, clear: false })} placeholder={settings.llm.has_api_key ? "•••••••• (leave blank to keep)" : "sk-…"} />
-              {settings.llm.has_api_key ? <Button size="sm" variant="ghost" onClick={() => setLlm({ ...llm, api_key: "", clear: !llm.clear })} title="Remove stored key"><Trash2 />{llm.clear ? " will clear" : ""}</Button> : null}
-            </div>
-          </div>
-          <p className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground"><KeyRound className="h-3 w-3" /> Keys are encrypted at rest and never returned to the browser. Active: {settings.system.llm_active ? `yes (${String(settings.system.llm_model ?? "")})` : "no — heuristic planner"}.</p>
-        </div>
-      </HudPanel>
+      <LLMSettingsPanel settings={settings} />
       <HudPanel title="COST & SAFETY LIMITS" corners className="lg:col-span-2">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Object.entries(LIMIT_LABELS).map(([k, meta]) => (
@@ -172,7 +143,7 @@ function OrganisationTab({ settings }: { settings: OrgSettings }) {
             </div>
           ))}
         </div>
-        <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+        <p className="mt-2 font-sans text-[10px] text-muted-foreground">
           Blank = server default. Hard server ceilings: task {sys ? formatDuration(sys.max_task_duration_seconds) : "—"}, retries {sys?.max_retries_limit ?? "—"}, scenes {sys?.max_scenes_per_task ?? "—"}, sessions {sys?.max_browser_sessions_per_org ?? "—"}, file {sys?.max_generated_file_size_mb ?? "—"} MB, {sys?.max_concurrent_tasks_per_worker ?? "—"} tasks/worker.
         </p>
         <Button size="sm" className="mt-3" loading={save.isPending} onClick={() => save.mutate()}>Save organisation settings</Button>
@@ -199,7 +170,7 @@ function MembersTab() {
         <Button size="sm" disabled={!email.trim()} loading={add.isPending} onClick={() => add.mutate()}>Add</Button>
       </div>
       {members.isLoading ? <Skeleton className="m-3 h-20" /> : (
-        <table className="w-full font-mono text-[11px]">
+        <table className="w-full font-sans text-[11px]">
           <thead><tr className="hud-label border-b border-border text-left"><th className="px-3 py-2">User</th><th className="px-2 py-2">Role</th><th className="px-2 py-2" /></tr></thead>
           <tbody className="divide-y divide-border">
             {(members.data ?? []).map((m) => (
@@ -216,7 +187,7 @@ function MembersTab() {
           </tbody>
         </table>
       )}
-      <p className="p-3 font-mono text-[10px] text-muted-foreground">viewer = read-only · member = run tasks & edit projects · admin = settings, platforms, members.</p>
+      <p className="p-3 font-sans text-[10px] text-muted-foreground">viewer = read-only · member = run tasks & edit projects · admin = settings, platforms, members.</p>
     </HudPanel>
   );
 }
@@ -227,7 +198,7 @@ function SystemTab({ settings }: { settings: OrgSettings }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <HudPanel title="RUNTIME" corners>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-[11px]">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-sans text-[11px]">
           <dt className="text-muted-foreground">Environment</dt><dd>{String(sys.environment)}</dd>
           <dt className="text-muted-foreground">Event bus</dt><dd>{String(sys.bus)}</dd>
           <dt className="text-muted-foreground">Worker</dt><dd>{sys.embedded_worker ? "embedded in API (dev)" : "separate worker process(es)"}</dd>
@@ -237,7 +208,7 @@ function SystemTab({ settings }: { settings: OrgSettings }) {
       </HudPanel>
       <HudPanel title="HOST METRICS" corners>
         {metrics.data ? (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-[11px]">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-sans text-[11px]">
             {Object.entries(metrics.data).filter(([, v]) => typeof v !== "object").map(([k, v]) => (
               <React.Fragment key={k}><dt className="text-muted-foreground">{k}</dt><dd>{String(v)}</dd></React.Fragment>
             ))}

@@ -551,7 +551,25 @@ class AuditLogOut(ORMModel):
 class OrgSettingsUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     settings: dict[str, Any] | None = None
-    llm_provider: Literal["inherit", "none", "openai", "anthropic"] | None = None
+    llm_provider: (
+        Literal[
+            "inherit",
+            "none",
+            "openai",
+            "openai_compatible",
+            "openrouter",
+            "groq",
+            "deepseek",
+            "together",
+            "fireworks",
+            "mistral",
+            "xai",
+            "gemini",
+            "ollama",
+            "anthropic",
+        ]
+        | None
+    ) = None
     llm_model: str | None = Field(default=None, max_length=120)
     llm_base_url: str | None = Field(default=None, max_length=500)
     llm_api_key: str | None = Field(default=None, max_length=500)

@@ -6,10 +6,10 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.llm import llm_status
+from app.agent.llm import llm_status, provider_catalog, validate_llm_base_url
 from app.core.config import get_settings
 from app.core.errors import ValidationFailed
-from app.core.security import decrypt_secret, encrypt_secret, mask_secret, try_decrypt_secret
+from app.core.security import decrypt_secret, encrypt_secret, try_decrypt_secret
 from app.models import Organization
 
 LIMIT_KEYS = {
@@ -65,13 +65,18 @@ def llm_settings_view(org: Organization) -> dict[str, Any]:
     cfg = (org.settings or {}).get("llm") or {}
     encrypted = (org.secrets_encrypted or {}).get("llm_api_key")
     key_plain = try_decrypt_secret(encrypted) if encrypted else None
+    status = llm_status(llm_overrides_for(org))
     return {
         "provider": cfg.get("provider") or "inherit",
         "model": cfg.get("model"),
         "base_url": cfg.get("base_url"),
-        "api_key_masked": mask_secret(key_plain),
+        # Never return even a key prefix/suffix; only report whether an encrypted key exists.
+        "api_key_masked": "••••••••" if key_plain else None,
         "has_api_key": bool(key_plain),
-        "status": llm_status(llm_overrides_for(org)),
+        "configured": status["configured"],
+        "effective_provider": status["provider"],
+        "status": status,
+        "providers": provider_catalog(),
     }
 
 
@@ -85,22 +90,37 @@ async def update_org_settings(db: AsyncSession, org: Organization, data: dict[st
         }
         settings_blob.update(allowed)
     llm_cfg = dict(settings_blob.get("llm") or {})
-    if data.get("llm_provider") is not None:
-        llm_cfg["provider"] = data["llm_provider"]
+    previous_provider = llm_cfg.get("provider") or "inherit"
+    next_provider = data.get("llm_provider")
+    provider_changed = next_provider is not None and next_provider != previous_provider
+    if next_provider is not None:
+        llm_cfg["provider"] = next_provider
+        if provider_changed:
+            # Avoid accidentally carrying a model ID or endpoint from a different provider.
+            if "llm_model" not in data:
+                llm_cfg["model"] = None
+            if "llm_base_url" not in data:
+                llm_cfg["base_url"] = None
     if data.get("llm_model") is not None:
-        llm_cfg["model"] = data["llm_model"] or None
+        llm_cfg["model"] = data["llm_model"].strip() or None
     if data.get("llm_base_url") is not None:
         url = data["llm_base_url"].strip()
-        if url and not url.startswith(("http://", "https://")):
-            raise ValidationFailed("LLM base URL must start with http:// or https://")
+        if url:
+            try:
+                url = validate_llm_base_url(url, provider=str(next_provider or llm_cfg.get("provider") or ""))
+            except ValueError as exc:
+                raise ValidationFailed(str(exc)) from exc
         llm_cfg["base_url"] = url or None
+    new_api_key = str(data.get("llm_api_key") or "").strip()
+    if new_api_key and llm_cfg.get("provider") in (None, "", "inherit", "none"):
+        raise ValidationFailed("Select an organization AI provider before saving an API key")
     settings_blob["llm"] = llm_cfg
     org.settings = settings_blob
     secrets = dict(org.secrets_encrypted or {})
-    if data.get("clear_llm_api_key"):
+    if data.get("clear_llm_api_key") or (provider_changed and not new_api_key):
         secrets.pop("llm_api_key", None)
-    elif data.get("llm_api_key"):
-        secrets["llm_api_key"] = encrypt_secret(data["llm_api_key"].strip())
+    elif new_api_key:
+        secrets["llm_api_key"] = encrypt_secret(new_api_key)
     org.secrets_encrypted = secrets
     if data.get("limits") is not None:
         limits = dict(org.limits or {})
