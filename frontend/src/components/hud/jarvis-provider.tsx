@@ -14,7 +14,7 @@ export function useJarvisConsole(): JarvisController {
   return ctx;
 }
 
-/** Mounts the single JARVIS controller and the global confirmation gate. */
+/** Mounts the single assistant controller and the global confirmation gate. */
 export function JarvisProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const controller = useJarvisController(enabled);
   const pending = useJarvis((s) => s.pendingConfirm);

@@ -42,9 +42,19 @@ async def list_sessions(auth: CurrentAuth, db: DB) -> list[BrowserSessionOut]:
 
 
 @router.post("", response_model=BrowserSessionOut, status_code=status.HTTP_201_CREATED)
-async def create_session(payload: BrowserSessionCreate, request: Request, auth: CurrentAuth, db: DB, _: Writer) -> BrowserSessionOut:
+async def create_session(
+    payload: BrowserSessionCreate, request: Request, auth: CurrentAuth, db: DB, _: Writer
+) -> BrowserSessionOut:
     session = await session_service.create_session(db, auth, payload.model_dump())
-    await audit(db, "session.created", request=request, user_id=auth.user_id, org_id=auth.org_id, resource_type="browser_session", resource_id=session.id)
+    await audit(
+        db,
+        "session.created",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        resource_type="browser_session",
+        resource_id=session.id,
+    )
     await db.commit()
     return _out(session)
 
@@ -56,25 +66,54 @@ async def get_session(session_id: uuid.UUID, auth: CurrentAuth, db: DB) -> Brows
 
 
 @router.patch("/{session_id}", response_model=BrowserSessionOut)
-async def update_session(session_id: uuid.UUID, payload: BrowserSessionUpdate, auth: CurrentAuth, db: DB, _: Writer) -> BrowserSessionOut:
+async def update_session(
+    session_id: uuid.UUID, payload: BrowserSessionUpdate, auth: CurrentAuth, db: DB, _: Writer
+) -> BrowserSessionOut:
     session = await session_service.get_session(db, auth.org_id, session_id)
     session = await session_service.update_session(db, session, payload.model_dump(exclude_unset=True))
     return _out(session)
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_session(session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer) -> Response:
+async def delete_session(
+    session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer
+) -> Response:
     session = await session_service.get_session(db, auth.org_id, session_id)
-    await audit(db, "session.deleted", request=request, user_id=auth.user_id, org_id=auth.org_id, resource_type="browser_session", resource_id=session.id)
+    await audit(
+        db,
+        "session.deleted",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        resource_type="browser_session",
+        resource_id=session.id,
+    )
     await session_service.delete_session(db, session)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{session_id}/open", response_model=BrowserSessionOut)
-async def open_session(session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer, payload: NavigateRequest | None = None) -> BrowserSessionOut:
+async def open_session(
+    session_id: uuid.UUID,
+    request: Request,
+    auth: CurrentAuth,
+    db: DB,
+    _: Writer,
+    payload: NavigateRequest | None = None,
+) -> BrowserSessionOut:
     session = await session_service.get_session(db, auth.org_id, session_id)
-    session = await session_service.request_open(db, session, interactive=True, url=payload.url if payload else None)
-    await audit(db, "session.opened", request=request, user_id=auth.user_id, org_id=auth.org_id, resource_type="browser_session", resource_id=session.id)
+    session = await session_service.request_open(
+        db, session, interactive=True, url=payload.url if payload else None
+    )
+    await audit(
+        db,
+        "session.opened",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        resource_type="browser_session",
+        resource_id=session.id,
+    )
     await db.commit()
     return _out(session)
 
@@ -87,14 +126,24 @@ async def close_session(session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: Wri
 
 
 @router.post("/{session_id}/takeover", response_model=BrowserSessionOut)
-async def takeover_session(session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer) -> BrowserSessionOut:
+async def takeover_session(
+    session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer
+) -> BrowserSessionOut:
     """Give the human direct control of an open session (outside of a task)."""
     session = await session_service.get_session(db, auth.org_id, session_id)
     if session.status not in ("ready", "in_use", "launching"):
         session = await session_service.request_open(db, session, interactive=True)
     else:
         session = await session_service.set_interactive(db, session, True)
-    await audit(db, "session.takeover", request=request, user_id=auth.user_id, org_id=auth.org_id, resource_type="browser_session", resource_id=session.id)
+    await audit(
+        db,
+        "session.takeover",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        resource_type="browser_session",
+        resource_id=session.id,
+    )
     await db.commit()
     return _out(session)
 
@@ -107,7 +156,9 @@ async def release_session(session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: W
 
 
 @router.post("/{session_id}/navigate", response_model=BrowserSessionOut)
-async def navigate(session_id: uuid.UUID, payload: NavigateRequest, auth: CurrentAuth, db: DB, _: Writer) -> BrowserSessionOut:
+async def navigate(
+    session_id: uuid.UUID, payload: NavigateRequest, auth: CurrentAuth, db: DB, _: Writer
+) -> BrowserSessionOut:
     session = await session_service.get_session(db, auth.org_id, session_id)
     if session.status not in ("ready", "in_use"):
         raise ConflictError("Open the session first")
@@ -116,16 +167,28 @@ async def navigate(session_id: uuid.UUID, payload: NavigateRequest, auth: Curren
 
 
 @router.post("/{session_id}/logout", response_model=BrowserSessionOut)
-async def logout_session(session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer) -> BrowserSessionOut:
+async def logout_session(
+    session_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer
+) -> BrowserSessionOut:
     session = await session_service.get_session(db, auth.org_id, session_id)
     session = await session_service.logout_session(db, session)
-    await audit(db, "session.logout", request=request, user_id=auth.user_id, org_id=auth.org_id, resource_type="browser_session", resource_id=session.id)
+    await audit(
+        db,
+        "session.logout",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        resource_type="browser_session",
+        resource_id=session.id,
+    )
     await db.commit()
     return _out(session)
 
 
 @router.post("/{session_id}/mark-login", response_model=BrowserSessionOut)
-async def mark_login(session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: Writer, logged_in: bool = True) -> BrowserSessionOut:
+async def mark_login(
+    session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: Writer, logged_in: bool = True
+) -> BrowserSessionOut:
     """The user confirms they finished logging in manually."""
     session = await session_service.get_session(db, auth.org_id, session_id)
     session.login_status = "logged_in" if logged_in else "logged_out"
@@ -134,7 +197,9 @@ async def mark_login(session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: Writer
 
 
 @router.post("/{session_id}/upload", response_model=dict)
-async def upload_during_takeover(session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: Writer, file: UploadFile = File(...)) -> dict:
+async def upload_during_takeover(
+    session_id: uuid.UUID, auth: CurrentAuth, db: DB, _: Writer, file: UploadFile = File(...)
+) -> dict:
     """Upload a file into the live browser while the human has control (file chooser or file input)."""
     session = await session_service.get_session(db, auth.org_id, session_id)
     if not session.interactive:
@@ -157,7 +222,9 @@ async def upload_during_takeover(session_id: uuid.UUID, auth: CurrentAuth, db: D
                 target.unlink(missing_ok=True)
                 raise ValidationFailed(f"File exceeds the {settings.max_upload_size_mb} MB upload limit")
             fh.write(chunk)
-    await get_bus().publish(input_channel(session.id), {"type": "upload_file", "path": str(target), "filename": target.name})
+    await get_bus().publish(
+        input_channel(session.id), {"type": "upload_file", "path": str(target), "filename": target.name}
+    )
     return {"ok": True, "filename": target.name}
 
 
@@ -165,7 +232,13 @@ async def upload_during_takeover(session_id: uuid.UUID, auth: CurrentAuth, db: D
 async def session_screenshots(session_id: uuid.UUID, auth: CurrentAuth, db: DB) -> list[dict]:
     session = await session_service.get_session(db, auth.org_id, session_id)
     shots = await file_service.list_screenshots(db, auth.org_id, session_id=session.id, limit=60)
-    return [{**ScreenshotOut.model_validate(s).model_dump(), "image": file_service.signed_url("screenshot", auth.org_id, s.id, inline=True, ttl=3600)} for s in shots]
+    return [
+        {
+            **ScreenshotOut.model_validate(s).model_dump(),
+            "image": file_service.signed_url("screenshot", auth.org_id, s.id, inline=True, ttl=3600),
+        }
+        for s in shots
+    ]
 
 
 @router.get("/{session_id}/preview.jpg", include_in_schema=False)
@@ -190,6 +263,8 @@ async def preview(session_id: uuid.UUID, auth: CurrentAuth, db: DB) -> RawRespon
         data = msg.get("data")
         if not data:
             return RawResponse(status_code=204)
-        return RawResponse(content=base64.b64decode(data), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+        return RawResponse(
+            content=base64.b64decode(data), media_type="image/jpeg", headers={"Cache-Control": "no-store"}
+        )
     finally:
         bus.unsubscribe(sub)

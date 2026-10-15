@@ -25,7 +25,12 @@ from app.realtime.events import emit
 from app.services.org_settings import effective_limits
 
 ACTIVE_STATUSES = [s.value for s in TaskStatus if s.is_active]
-RUNNING_LIKE = (TaskStatus.running.value, TaskStatus.paused.value, TaskStatus.waiting_for_human.value, TaskStatus.needs_attention.value)
+RUNNING_LIKE = (
+    TaskStatus.running.value,
+    TaskStatus.paused.value,
+    TaskStatus.waiting_for_human.value,
+    TaskStatus.needs_attention.value,
+)
 
 
 def _now() -> datetime:
@@ -43,22 +48,36 @@ async def get_task(db: AsyncSession, org_id: uuid.UUID, task_id: uuid.UUID) -> T
     return task
 
 
-async def list_tasks(db: AsyncSession, org_id: uuid.UUID, *, status: str | None = None, project_id: uuid.UUID | None = None, limit: int = 100, offset: int = 0) -> tuple[list[Task], int]:
+async def list_tasks(
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    *,
+    status: str | None = None,
+    project_id: uuid.UUID | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> tuple[list[Task], int]:
     from sqlalchemy import func
 
     query = select(Task).where(Task.organization_id == org_id)
     if status == "active":
         query = query.where(Task.status.in_(ACTIVE_STATUSES))
     elif status == "attention":
-        query = query.where(Task.status.in_([TaskStatus.needs_attention.value, TaskStatus.waiting_for_human.value]))
+        query = query.where(
+            Task.status.in_([TaskStatus.needs_attention.value, TaskStatus.waiting_for_human.value])
+        )
     elif status == "finished":
-        query = query.where(Task.status.in_([TaskStatus.completed.value, TaskStatus.failed.value, TaskStatus.cancelled.value]))
+        query = query.where(
+            Task.status.in_([TaskStatus.completed.value, TaskStatus.failed.value, TaskStatus.cancelled.value])
+        )
     elif status:
         query = query.where(Task.status == status)
     if project_id:
         query = query.where(Task.project_id == project_id)
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
-    rows = (await db.execute(query.order_by(Task.created_at.desc()).offset(offset).limit(limit))).scalars().all()
+    rows = (
+        (await db.execute(query.order_by(Task.created_at.desc()).offset(offset).limit(limit))).scalars().all()
+    )
     return list(rows), int(total)
 
 
@@ -66,8 +85,13 @@ async def create_task(db: AsyncSession, auth: AuthContext, data: dict[str, Any])
     settings = get_settings()
     limits = effective_limits(auth.organization)
     config = dict(data.get("config") or {})
-    config["max_retries"] = min(int(config.get("max_retries", settings.max_retries_default)), limits["max_retries"])
-    config["generation_timeout_seconds"] = min(int(config.get("generation_timeout_seconds", settings.generation_timeout_seconds)), limits["generation_timeout_seconds"])
+    config["max_retries"] = min(
+        int(config.get("max_retries", settings.max_retries_default)), limits["max_retries"]
+    )
+    config["generation_timeout_seconds"] = min(
+        int(config.get("generation_timeout_seconds", settings.generation_timeout_seconds)),
+        limits["generation_timeout_seconds"],
+    )
     config["max_task_duration_seconds"] = limits["max_task_duration_seconds"]
     config["max_file_size_mb"] = limits["max_file_size_mb"]
     if config.get("scene_ids") is not None:
@@ -93,7 +117,11 @@ async def create_task(db: AsyncSession, auth: AuthContext, data: dict[str, Any])
     if kind == "video_generation":
         if project is None:
             raise ValidationFailed("Video generation tasks require a project")
-        scenes = (await db.execute(select(Scene).where(Scene.project_id == project.id).order_by(Scene.index))).scalars().all()
+        scenes = (
+            (await db.execute(select(Scene).where(Scene.project_id == project.id).order_by(Scene.index)))
+            .scalars()
+            .all()
+        )
         if not scenes:
             raise ValidationFailed("Analyse the script and review the scenes before starting generation")
         selected = _select_scenes(scenes, config)
@@ -102,7 +130,11 @@ async def create_task(db: AsyncSession, auth: AuthContext, data: dict[str, Any])
         if len(selected) > limits["max_scenes_per_task"]:
             raise LimitExceededError(f"A task may contain at most {limits['max_scenes_per_task']} scenes")
         scene_count = len(selected)
-        active = (await db.execute(select(Task.id).where(Task.project_id == project.id, Task.status.in_(ACTIVE_STATUSES)))).scalar_one_or_none()
+        active = (
+            await db.execute(
+                select(Task.id).where(Task.project_id == project.id, Task.status.in_(ACTIVE_STATUSES))
+            )
+        ).scalar_one_or_none()
         if active is not None:
             raise ConflictError("This project already has an active task")
         for scene in selected:
@@ -111,10 +143,20 @@ async def create_task(db: AsyncSession, auth: AuthContext, data: dict[str, Any])
     else:
         if not (data.get("instructions") or "").strip():
             raise ValidationFailed("Describe what the agent should do")
-    active_count = (await db.execute(select(Task.id).where(Task.organization_id == auth.org_id, Task.status.in_(ACTIVE_STATUSES)))).scalars().all()
+    active_count = (
+        (
+            await db.execute(
+                select(Task.id).where(Task.organization_id == auth.org_id, Task.status.in_(ACTIVE_STATUSES))
+            )
+        )
+        .scalars()
+        .all()
+    )
     if len(active_count) >= max(limits["max_concurrent_tasks"] * 5, 10):
         raise LimitExceededError("Too many active tasks; wait for running tasks to finish")
-    title = data.get("title") or (f"{project.name} – video generation" if project else kind.replace("_", " ").title())
+    title = data.get("title") or (
+        f"{project.name} – video generation" if project else kind.replace("_", " ").title()
+    )
     task = Task(
         organization_id=auth.org_id,
         project_id=project.id if project else None,
@@ -127,14 +169,38 @@ async def create_task(db: AsyncSession, auth: AuthContext, data: dict[str, Any])
         browser_session_id=session_id,
         config=config,
         priority=int(data.get("priority", 5)),
-        progress={"total": scene_count, "completed": 0, "failed": 0, "skipped": 0, "current_scene_id": None, "current_scene_code": None, "percent": 0},
+        progress={
+            "total": scene_count,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "current_scene_id": None,
+            "current_scene_code": None,
+            "percent": 0,
+        },
         queued_at=_now() if data.get("start", True) else None,
     )
     db.add(task)
     await db.flush()
-    await emit(db, "task.created", auth.org_id, f"Task '{task.title}' created", task_id=task.id, project_id=task.project_id, payload={"status": task.status, "scenes": scene_count})
+    await emit(
+        db,
+        "task.created",
+        auth.org_id,
+        f"Task '{task.title}' created",
+        task_id=task.id,
+        project_id=task.project_id,
+        payload={"status": task.status, "scenes": scene_count},
+    )
     if task.status == TaskStatus.queued.value:
-        await emit(db, "task.queued", auth.org_id, f"Task '{task.title}' queued", task_id=task.id, project_id=task.project_id, payload={"status": task.status})
+        await emit(
+            db,
+            "task.queued",
+            auth.org_id,
+            f"Task '{task.title}' queued",
+            task_id=task.id,
+            project_id=task.project_id,
+            payload={"status": task.status},
+        )
     await db.commit()
     await _wake_workers(task.id)
     return task
@@ -151,20 +217,43 @@ def _select_scenes(scenes: list[Scene], config: dict[str, Any]) -> list[Scene]:
 
 
 async def start_task(db: AsyncSession, task: Task) -> Task:
-    if task.status not in (TaskStatus.draft.value, TaskStatus.failed.value, TaskStatus.cancelled.value, TaskStatus.completed.value):
+    if task.status not in (
+        TaskStatus.draft.value,
+        TaskStatus.failed.value,
+        TaskStatus.cancelled.value,
+        TaskStatus.completed.value,
+    ):
         raise ConflictError(f"Task cannot be started from status {task.status}")
     if task.project_id:
-        active = (await db.execute(select(Task.id).where(Task.project_id == task.project_id, Task.status.in_(ACTIVE_STATUSES), Task.id != task.id))).scalar_one_or_none()
+        active = (
+            await db.execute(
+                select(Task.id).where(
+                    Task.project_id == task.project_id, Task.status.in_(ACTIVE_STATUSES), Task.id != task.id
+                )
+            )
+        ).scalar_one_or_none()
         if active is not None:
             raise ConflictError("This project already has an active task")
-        scenes = (await db.execute(select(Scene).where(Scene.project_id == task.project_id).order_by(Scene.index))).scalars().all()
+        scenes = (
+            (await db.execute(select(Scene).where(Scene.project_id == task.project_id).order_by(Scene.index)))
+            .scalars()
+            .all()
+        )
         selected = _select_scenes(scenes, task.config)
         if task.kind == "video_generation" and not selected:
             raise ValidationFailed("No scenes are pending generation")
         for scene in selected:
             scene.status = SceneStatus.queued.value
             scene.last_error = ""
-        task.progress = {**task.progress, "total": len(selected), "completed": 0, "failed": 0, "skipped": 0, "percent": 0, "current_scene_id": None}
+        task.progress = {
+            **task.progress,
+            "total": len(selected),
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "percent": 0,
+            "current_scene_id": None,
+        }
     task.status = TaskStatus.queued.value
     task.control = TaskControl.none.value
     task.queued_at = _now()
@@ -174,7 +263,15 @@ async def start_task(db: AsyncSession, task: Task) -> Task:
     task.worker_id = None
     task.heartbeat_at = None
     task.retry_count += 1 if task.started_at else 0
-    await emit(db, "task.queued", task.organization_id, f"Task '{task.title}' queued", task_id=task.id, project_id=task.project_id, payload={"status": task.status})
+    await emit(
+        db,
+        "task.queued",
+        task.organization_id,
+        f"Task '{task.title}' queued",
+        task_id=task.id,
+        project_id=task.project_id,
+        payload={"status": task.status},
+    )
     await db.commit()
     await _wake_workers(task.id)
     return task
@@ -182,7 +279,15 @@ async def start_task(db: AsyncSession, task: Task) -> Task:
 
 async def _signal(db: AsyncSession, task: Task, control: TaskControl, event: str, message: str) -> Task:
     task.control = control.value
-    await emit(db, event, task.organization_id, message, task_id=task.id, project_id=task.project_id, payload={"control": control.value, "status": task.status})
+    await emit(
+        db,
+        event,
+        task.organization_id,
+        message,
+        task_id=task.id,
+        project_id=task.project_id,
+        payload={"control": control.value, "status": task.status},
+    )
     await db.commit()
     await _wake_workers(task.id, control.value)
     return task
@@ -191,11 +296,21 @@ async def _signal(db: AsyncSession, task: Task, control: TaskControl, event: str
 async def pause_task(db: AsyncSession, task: Task) -> Task:
     if task.status == TaskStatus.queued.value and task.worker_id is None:
         result = await db.execute(
-            update(Task).where(Task.id == task.id, Task.worker_id.is_(None), Task.status == TaskStatus.queued.value).values(status=TaskStatus.paused.value, paused_at=_now())
+            update(Task)
+            .where(Task.id == task.id, Task.worker_id.is_(None), Task.status == TaskStatus.queued.value)
+            .values(status=TaskStatus.paused.value, paused_at=_now())
         )
         if result.rowcount:
             await db.refresh(task)
-            await emit(db, "task.paused", task.organization_id, f"Task '{task.title}' paused", task_id=task.id, project_id=task.project_id, payload={"status": task.status})
+            await emit(
+                db,
+                "task.paused",
+                task.organization_id,
+                f"Task '{task.title}' paused",
+                task_id=task.id,
+                project_id=task.project_id,
+                payload={"status": task.status},
+            )
             await db.commit()
             return task
     if task.status not in (TaskStatus.running.value, TaskStatus.queued.value):
@@ -208,7 +323,15 @@ async def resume_task(db: AsyncSession, task: Task) -> Task:
         task.status = TaskStatus.queued.value
         task.control = TaskControl.none.value
         task.queued_at = _now()
-        await emit(db, "task.resumed", task.organization_id, f"Task '{task.title}' re-queued", task_id=task.id, project_id=task.project_id, payload={"status": task.status})
+        await emit(
+            db,
+            "task.resumed",
+            task.organization_id,
+            f"Task '{task.title}' re-queued",
+            task_id=task.id,
+            project_id=task.project_id,
+            payload={"status": task.status},
+        )
         await db.commit()
         await _wake_workers(task.id)
         return task
@@ -222,12 +345,31 @@ async def stop_task(db: AsyncSession, task: Task, *, reason: str = "stopped by u
         raise ConflictError("Task has already finished")
     if task.worker_id is None:
         result = await db.execute(
-            update(Task).where(Task.id == task.id, Task.worker_id.is_(None)).values(status=TaskStatus.cancelled.value, control=TaskControl.none.value, finished_at=_now(), error=reason)
+            update(Task)
+            .where(Task.id == task.id, Task.worker_id.is_(None))
+            .values(
+                status=TaskStatus.cancelled.value,
+                control=TaskControl.none.value,
+                finished_at=_now(),
+                error=reason,
+            )
         )
         if result.rowcount:
-            await db.execute(update(Scene).where(Scene.project_id == task.project_id, Scene.status == SceneStatus.queued.value).values(status=SceneStatus.draft.value)) if task.project_id else None
+            await db.execute(
+                update(Scene)
+                .where(Scene.project_id == task.project_id, Scene.status == SceneStatus.queued.value)
+                .values(status=SceneStatus.draft.value)
+            ) if task.project_id else None
             await db.refresh(task)
-            await emit(db, "task.cancelled", task.organization_id, f"Task '{task.title}' cancelled", task_id=task.id, project_id=task.project_id, payload={"status": task.status})
+            await emit(
+                db,
+                "task.cancelled",
+                task.organization_id,
+                f"Task '{task.title}' cancelled",
+                task_id=task.id,
+                project_id=task.project_id,
+                payload={"status": task.status},
+            )
             await db.commit()
             return task
     return await _signal(db, task, TaskControl.stop, "task.updated", "Stop requested")
@@ -248,11 +390,19 @@ async def release_task(db: AsyncSession, task: Task) -> Task:
 
 
 async def retry_task(db: AsyncSession, task: Task, *, scene_id: uuid.UUID | None = None) -> Task:
-    if task.status in (TaskStatus.needs_attention.value, TaskStatus.waiting_for_human.value, TaskStatus.paused.value) and task.worker_id:
+    if (
+        task.status
+        in (TaskStatus.needs_attention.value, TaskStatus.waiting_for_human.value, TaskStatus.paused.value)
+        and task.worker_id
+    ):
         return await _signal(db, task, TaskControl.retry_scene, "task.updated", "Retry requested")
     if task.status in (TaskStatus.failed.value, TaskStatus.cancelled.value, TaskStatus.completed.value):
         if task.kind == "video_generation":
-            task.config = {**task.config, "retry_failed_only": True, "scene_ids": [str(scene_id)] if scene_id else None}
+            task.config = {
+                **task.config,
+                "retry_failed_only": True,
+                "scene_ids": [str(scene_id)] if scene_id else None,
+            }
         return await start_task(db, task)
     raise ConflictError(f"Task cannot be retried from status {task.status}")
 
@@ -269,7 +419,15 @@ async def skip_scene(db: AsyncSession, task: Task, scene_id: uuid.UUID | None = 
             # Not the active scene: mark it skipped directly so the executor passes over it.
             if scene.status in (SceneStatus.queued.value, SceneStatus.failed.value, SceneStatus.draft.value):
                 scene.status = SceneStatus.skipped.value
-                await emit(db, "scene.skipped", task.organization_id, f"{scene.code} skipped", task_id=task.id, project_id=task.project_id, scene_id=scene.id)
+                await emit(
+                    db,
+                    "scene.skipped",
+                    task.organization_id,
+                    f"{scene.code} skipped",
+                    task_id=task.id,
+                    project_id=task.project_id,
+                    scene_id=scene.id,
+                )
                 await db.commit()
                 return task
     return await _signal(db, task, TaskControl.skip_scene, "task.updated", "Skip scene requested")
@@ -293,7 +451,19 @@ async def update_task(db: AsyncSession, task: Task, data: dict[str, Any]) -> Tas
 
 async def reorder_queue(db: AsyncSession, org_id: uuid.UUID, task_ids: list[uuid.UUID]) -> list[Task]:
     """Assign priorities so that queued tasks run in the requested order."""
-    tasks = (await db.execute(select(Task).where(Task.organization_id == org_id, Task.id.in_(task_ids), Task.status == TaskStatus.queued.value))).scalars().all()
+    tasks = (
+        (
+            await db.execute(
+                select(Task).where(
+                    Task.organization_id == org_id,
+                    Task.id.in_(task_ids),
+                    Task.status == TaskStatus.queued.value,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     by_id = {t.id: t for t in tasks}
     base = _now()
     for position, tid in enumerate(task_ids):
@@ -314,7 +484,15 @@ async def delete_task(db: AsyncSession, task: Task) -> None:
 
 
 async def stop_everything(db: AsyncSession, org_id: uuid.UUID) -> int:
-    tasks = (await db.execute(select(Task).where(Task.organization_id == org_id, Task.status.in_(ACTIVE_STATUSES)))).scalars().all()
+    tasks = (
+        (
+            await db.execute(
+                select(Task).where(Task.organization_id == org_id, Task.status.in_(ACTIVE_STATUSES))
+            )
+        )
+        .scalars()
+        .all()
+    )
     count = 0
     for task in tasks:
         try:
@@ -322,17 +500,37 @@ async def stop_everything(db: AsyncSession, org_id: uuid.UUID) -> int:
             count += 1
         except ConflictError:
             continue
-    await emit(db, "task.updated", org_id, f"Emergency stop: {count} task(s) stopping", payload={"count": count}, level="warning", commit=True)
+    await emit(
+        db,
+        "task.updated",
+        org_id,
+        f"Emergency stop: {count} task(s) stopping",
+        payload={"count": count},
+        level="warning",
+        commit=True,
+    )
     return count
 
 
 async def task_detail(db: AsyncSession, task: Task) -> dict[str, Any]:
     from app.models import TaskStep
 
-    steps = (await db.execute(select(TaskStep).where(TaskStep.task_id == task.id).order_by(TaskStep.index.desc()).limit(300))).scalars().all()
+    steps = (
+        (
+            await db.execute(
+                select(TaskStep).where(TaskStep.task_id == task.id).order_by(TaskStep.index.desc()).limit(300)
+            )
+        )
+        .scalars()
+        .all()
+    )
     scenes: list[Scene] = []
     if task.project_id:
-        scenes = list((await db.execute(select(Scene).where(Scene.project_id == task.project_id).order_by(Scene.index))).scalars().all())
+        scenes = list(
+            (await db.execute(select(Scene).where(Scene.project_id == task.project_id).order_by(Scene.index)))
+            .scalars()
+            .all()
+        )
     project_name = None
     if task.project_id:
         project = await db.get(Project, task.project_id)
@@ -341,4 +539,9 @@ async def task_detail(db: AsyncSession, task: Task) -> dict[str, Any]:
     if task.browser_session_id:
         session = await db.get(BrowserSession, task.browser_session_id)
         session_name = session.name if session else None
-    return {"steps": list(reversed(steps)), "scenes": scenes, "project_name": project_name, "session_name": session_name}
+    return {
+        "steps": list(reversed(steps)),
+        "scenes": scenes,
+        "project_name": project_name,
+        "session_name": session_name,
+    }

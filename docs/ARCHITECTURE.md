@@ -4,7 +4,7 @@
 
 | Component | Technology | Responsibility |
 | --- | --- | --- |
-| **frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind, shadcn-style primitives, TanStack Query, Zustand | JARVIS HUD, three-panel task workspace, live browser viewer, scene editor, all management pages. Talks only to the same origin (`/api`). |
+| **frontend** | Next.js 15 (App Router), React 19, TypeScript, Tailwind, shadcn-style primitives, TanStack Query, Zustand | AVINASH HUD (JARVIS-style), three-panel task workspace, live browser viewer, scene editor, all management pages. Talks only to the same origin (`/api`). |
 | **frontend/server.mjs** | Node `http` + `http-proxy` | Single-origin front door: `/api`, `/api/ws`, `/mock-platform` → backend; everything else → Next. Keeps cookies first-party (no CORS), proxies WebSocket upgrades. In Docker it runs Next's standalone server. |
 | **backend (API)** | FastAPI, SQLAlchemy 2 (async), Pydantic v2, Alembic | REST + WebSocket/SSE API, auth, tenancy, validation, queue control, signed URLs, mock platform. **Never launches browsers** in production (`EMBEDDED_WORKER=false`). |
 | **worker** | same code base, `python -m app.workers.main` | Claims queued tasks, applies control tokens, housekeeping/crash recovery. `WORKER_CAPABILITIES=general`. |

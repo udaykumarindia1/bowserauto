@@ -118,7 +118,14 @@ async def job_status(job_id: str) -> JSONResponse:
         status, progress = "processing", 96
     else:
         status, progress = ("failed", 0) if job["fail"] else ("completed", 100)
-    return JSONResponse({**{k: v for k, v in job.items() if k not in ("fail", "created", "total")}, "status": status, "progress": progress, "error": "server error, please retry" if status == "failed" else None})
+    return JSONResponse(
+        {
+            **{k: v for k, v in job.items() if k not in ("fail", "created", "total")},
+            "status": status,
+            "progress": progress,
+            "error": "server error, please retry" if status == "failed" else None,
+        }
+    )
 
 
 @router.get("/api/download/{job_id}", include_in_schema=False)

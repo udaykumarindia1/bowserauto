@@ -35,7 +35,25 @@ from app.realtime.bus import frames_channel, get_bus, input_channel, org_channel
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["realtime"])
 
-ALLOWED_INPUT_TYPES = {"mousemove", "mousedown", "mouseup", "click", "wheel", "keydown", "keyup", "text", "paste", "navigate", "back", "forward", "reload", "switch_tab", "new_tab", "close_tab", "release_keys"}
+ALLOWED_INPUT_TYPES = {
+    "mousemove",
+    "mousedown",
+    "mouseup",
+    "click",
+    "wheel",
+    "keydown",
+    "keyup",
+    "text",
+    "paste",
+    "navigate",
+    "back",
+    "forward",
+    "reload",
+    "switch_tab",
+    "new_tab",
+    "close_tab",
+    "release_keys",
+}
 
 
 @router.get("/events")
@@ -62,7 +80,11 @@ async def org_events(request: Request, auth: CurrentAuth) -> StreamingResponse:
         finally:
             bus.unsubscribe(sub)
 
-    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.websocket("/ws")
@@ -123,7 +145,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             bus.unsubscribe(sub)
 
     try:
-        await send({"type": "hello", "user_id": str(auth.user_id), "organization_id": str(org_id), "role": auth.role})
+        await send(
+            {"type": "hello", "user_id": str(auth.user_id), "organization_id": str(org_id), "role": auth.role}
+        )
         while True:
             raw = await websocket.receive_text()
             if len(raw) > 64_000:
@@ -147,7 +171,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     continue
                 session_id = str(message.get("session_id", ""))
                 event = message.get("event") or {}
-                if session_id not in session_subs or not isinstance(event, dict) or event.get("type") not in ALLOWED_INPUT_TYPES:
+                if (
+                    session_id not in session_subs
+                    or not isinstance(event, dict)
+                    or event.get("type") not in ALLOWED_INPUT_TYPES
+                ):
                     continue
                 await bus.publish(input_channel(session_id), {**event, "user_id": str(auth.user_id)})
             else:

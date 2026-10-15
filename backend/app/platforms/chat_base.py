@@ -23,10 +23,21 @@ class ChatPlatformAdapter(PlatformAdapter):
     output_kind = "text"
     output_extension = ".md"
     supported_actions: ClassVar[list[str]] = ["ask", "upload_reference", "extract_answer"]
-    capabilities: ClassVar[dict[str, Any]] = {"max_clip_seconds": 0, "reference_images": True, "negative_prompt": False, "text_output": True}
+    capabilities: ClassVar[dict[str, Any]] = {
+        "max_clip_seconds": 0,
+        "reference_images": True,
+        "negative_prompt": False,
+        "text_output": True,
+    }
     stable_seconds: ClassVar[float] = 2.5  # answer unchanged for this long => complete
     status_patterns: ClassVar[dict[str, list[str]]] = {}
-    error_patterns: ClassVar[list[str]] = [r"something went wrong", r"an error occurred", r"network error", r"too many requests", r"rate limit"]
+    error_patterns: ClassVar[list[str]] = [
+        r"something went wrong",
+        r"an error occurred",
+        r"network error",
+        r"too many requests",
+        r"rate limit",
+    ]
 
     async def generate(self, ctx: AdapterContext, target_dir: Path) -> GenerationOutcome:  # type: ignore[override]
         started = time.monotonic()
@@ -48,7 +59,12 @@ class ChatPlatformAdapter(PlatformAdapter):
         path.write_text(header + answer.strip() + "\n", encoding="utf-8")
         download = DownloadResult(path=path, suggested_filename=path.name, size_bytes=path.stat().st_size)
         await ctx.set_state(GenerationState.SUCCESS, "answer saved")
-        return GenerationOutcome(download=download, output_kind="text", generation_seconds=time.monotonic() - started, details={"chars": len(answer)})
+        return GenerationOutcome(
+            download=download,
+            output_kind="text",
+            generation_seconds=time.monotonic() - started,
+            details={"chars": len(answer)},
+        )
 
     async def start_generation(self, ctx: AdapterContext) -> None:
         spec = self.selector("send_button")

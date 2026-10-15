@@ -129,7 +129,9 @@ class AssetOut(ORMModel):
     size_bytes: int
     sha256: str
     created_at: datetime
-    metadata_: dict[str, Any] = Field(default={}, validation_alias="metadata_", serialization_alias="metadata")
+    metadata_: dict[str, Any] = Field(
+        default={}, validation_alias="metadata_", serialization_alias="metadata"
+    )
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
@@ -255,7 +257,15 @@ class TaskConfig(BaseModel):
 
 class TaskCreate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
-    kind: Literal["video_generation", "browser_workflow", "image_generation", "research", "data_entry", "website_testing", "content_creation"] = "video_generation"
+    kind: Literal[
+        "video_generation",
+        "browser_workflow",
+        "image_generation",
+        "research",
+        "data_entry",
+        "website_testing",
+        "content_creation",
+    ] = "video_generation"
     project_id: uuid.UUID | None = None
     instructions: str = Field(default="", max_length=20_000)
     platform_key: str | None = Field(default=None, max_length=60)
@@ -448,7 +458,9 @@ class GeneratedFileOut(ORMModel):
     status: str
     retry_count: int
     created_at: datetime
-    metadata_: dict[str, Any] = Field(default={}, validation_alias="metadata_", serialization_alias="metadata")
+    metadata_: dict[str, Any] = Field(
+        default={}, validation_alias="metadata_", serialization_alias="metadata"
+    )
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 

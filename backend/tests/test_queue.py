@@ -21,7 +21,9 @@ async def test_video_task_completes_and_files_are_verified(client: ApiClient, fa
     assert len(scenes) == 3
     assert [s["code"] for s in scenes] == ["scene_001", "scene_002", "scene_003"]
 
-    task = await client.create_task(project["id"], config={"max_retries": 1, "generation_timeout_seconds": 60})
+    task = await client.create_task(
+        project["id"], config={"max_retries": 1, "generation_timeout_seconds": 60}
+    )
     assert task["status"] in ("queued", "running")
     done = await client.wait_task(task["id"], {"completed", "failed"}, timeout=60)
     assert done["status"] == "completed", done
@@ -58,7 +60,13 @@ async def test_video_task_completes_and_files_are_verified(client: ApiClient, fa
     # Activity stream recorded the lifecycle with structured event types.
     activity = (await client.get(f"/api/tasks/{task['id']}/activity")).json()
     types = {entry["event_type"] for entry in activity}
-    assert {"task.started", "scene.started", "scene.completed", "download.completed", "task.completed"} <= types
+    assert {
+        "task.started",
+        "scene.started",
+        "scene.completed",
+        "download.completed",
+        "task.completed",
+    } <= types
     screenshots = (await client.get(f"/api/tasks/{task['id']}/screenshots")).json()
     assert len(screenshots) >= 3
     shot = await client.http.get(screenshots[0]["image"]["url"])
@@ -106,7 +114,9 @@ async def test_retry_with_backoff_then_success(client: ApiClient, fake_sites, si
 
 async def test_failure_after_retries_needs_attention_then_skip(client: ApiClient, fake_sites) -> None:
     fake_sites(generation_seconds=0.05, fail_first_attempts=99)
-    project = await client.create_project(script="Scene 1: It always fails.\n\nScene 2: This one works after skip.")
+    project = await client.create_project(
+        script="Scene 1: It always fails.\n\nScene 2: This one works after skip."
+    )
     task = await client.create_task(project["id"], config={"max_retries": 0})
     waiting = await client.wait_task(task["id"], {"needs_attention", "failed", "completed"}, timeout=30)
     assert waiting["status"] == "needs_attention", waiting
@@ -116,7 +126,13 @@ async def test_failure_after_retries_needs_attention_then_skip(client: ApiClient
     assert waiting["attention"]["reason"]
     # Skip the broken scene; the second one also fails -> needs attention again -> stop.
     assert (await client.post(f"/api/tasks/{task['id']}/skip")).status_code == 200
-    second = await client.wait_until(task["id"], lambda t: t["status"] in ("failed", "completed") or t.get("attention", {}).get("scene_code") == "scene_002", timeout=30)
+    second = await client.wait_until(
+        task["id"],
+        lambda t: (
+            t["status"] in ("failed", "completed") or t.get("attention", {}).get("scene_code") == "scene_002"
+        ),
+        timeout=30,
+    )
     assert second["status"] == "needs_attention" and second["attention"]["scene_code"] == "scene_002"
     assert (await client.post(f"/api/tasks/{task['id']}/stop")).status_code == 200
     stopped = await client.wait_task(task["id"], {"cancelled"}, timeout=15)
@@ -125,7 +141,11 @@ async def test_failure_after_retries_needs_attention_then_skip(client: ApiClient
     assert scenes[0]["status"] == "skipped"
     assert scenes[1]["status"] in ("failed", "draft", "queued")
     # Scene edit is allowed while paused on attention, and 'retry failed only' re-runs just that scene.
-    assert (await client.patch(f"/api/projects/{project['id']}/scenes/{scenes[1]['id']}", json={"prompt": "A calmer prompt"})).status_code == 200
+    assert (
+        await client.patch(
+            f"/api/projects/{project['id']}/scenes/{scenes[1]['id']}", json={"prompt": "A calmer prompt"}
+        )
+    ).status_code == 200
 
 
 async def test_pause_resume_and_stop(client: ApiClient, fake_sites) -> None:
@@ -195,7 +215,9 @@ async def test_tasks_survive_worker_restart(client: ApiClient, fake_sites, worke
     running = await client.wait_task(task["id"], {"running"}, timeout=15)
     assert running["worker_id"] == worker.id
     # Let the worker get genuinely mid-flight (browser attached, scene in progress) first.
-    await client.wait_until(task["id"], lambda t: t["browser_session_id"] is not None and bool(t["current_action"]), timeout=15)
+    await client.wait_until(
+        task["id"], lambda t: t["browser_session_id"] is not None and bool(t["current_action"]), timeout=15
+    )
     # Simulate a crash of the current worker: running work goes back to the queue.
     await worker.stop()
     try:
@@ -236,12 +258,18 @@ async def test_task_limits_enforced(client: ApiClient) -> None:
     assert too_loose.status_code == 422
     settings = (await client.get("/api/settings")).json()
     assert settings["effective_limits"]["max_retries"] <= get_settings().max_retries_limit
-    assert (await client.patch("/api/settings", json={"limits": {"max_scenes_per_task": 0}})).status_code == 422
-    tightened = await client.patch("/api/settings", json={"limits": {"max_scenes_per_task": 1, "max_retries": 1}})
+    assert (
+        await client.patch("/api/settings", json={"limits": {"max_scenes_per_task": 0}})
+    ).status_code == 422
+    tightened = await client.patch(
+        "/api/settings", json={"limits": {"max_scenes_per_task": 1, "max_retries": 1}}
+    )
     assert tightened.status_code == 200, tightened.text
     assert (await client.get("/api/settings")).json()["effective_limits"]["max_scenes_per_task"] == 1
     # Task configs are clamped to the effective organisation limits.
-    created = await client.post("/api/tasks", json={"project_id": project["id"], "config": {"max_retries": 5}, "start": False})
+    created = await client.post(
+        "/api/tasks", json={"project_id": project["id"], "config": {"max_retries": 5}, "start": False}
+    )
     assert created.status_code == 201, created.text
     assert created.json()["config"]["max_retries"] == 1
     assert created.json()["config"]["max_task_duration_seconds"] <= get_settings().max_task_duration_seconds

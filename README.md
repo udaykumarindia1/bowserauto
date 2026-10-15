@@ -6,10 +6,10 @@ platforms (Google Flow, Runway, Kling, Luma, Hailuo, Pika, PixVerse, Vidu, ChatG
 any website via the generic agent) while you watch the live browser, take over whenever a login,
 CAPTCHA or verification appears, and hand control back to the agent.
 
-The UI is a JARVIS-style HUD (reactor core, console, system monitor, voice/wake-word,
+The UI is a JARVIS-style HUD with an assistant called **AVINASH** (reactor core, console, system monitor, voice/wake-word,
 customisable colours and assistant name) that ports the *functionality* of
 [FatihMakes/Mark-LV](https://github.com/FatihMakes/Mark-LV) to the web (see
-[docs/JARVIS.md](docs/JARVIS.md) for the feature mapping).
+[docs/ASSISTANT.md](docs/ASSISTANT.md) for the feature mapping).
 
 ```
  browser ──► frontend (Next.js + single-origin proxy :3000)
@@ -44,7 +44,7 @@ customisable colours and assistant name) that ports the *functionality* of
 | Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, timeouts) with server ceilings and pre-run estimates |
 | Templates | Built-in (AI Video Generation, Image Generation, Research, Data Entry, Website Testing, Content Creation, Browser Workflow) + custom |
 | Dev mode | Built-in **Mock Video Generator** (`/mock-platform`) with configurable speed, failure rate, login and human-check simulation for end-to-end runs without AI credits |
-| Tests | 77 backend tests (unit, API, auth, queue, take-over, files, assistant) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
+| Tests | 78 backend tests (unit, API, auth, queue, take-over, files, assistant) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
 
 ---
 
@@ -64,7 +64,7 @@ cd frontend && npm run dev:proxy   # UI on http://localhost:3000 (proxies /api t
    in by hand inside the live viewer, click **Mark logged in**.
 3. **Projects → New project**, paste a script, *Analyse into scenes*, review the scenes, press
    **Generate**. Watch the live browser, pause/take over/return control at any time.
-4. Or ask JARVIS in the console: `run: open news.ycombinator.com and read the top 5 titles`.
+4. Or ask AVINASH in the console: `run: open news.ycombinator.com and read the top 5 titles`.
 
 Smoke scripts (API must be running):
 
@@ -125,14 +125,14 @@ backend/
 frontend/
   src/app/          Next.js App Router pages (dashboard, new-task, projects, sessions, tasks,
                     files, platforms, templates, activity, settings, auth)
-  src/components/   hud/ (JARVIS core, console, sys monitor, customise, memory), browser/
+  src/components/   hud/ (AVINASH core, console, sys monitor, customise, memory), browser/
                     (live viewer), tasks/, scenes/, layout/, ui/
   src/lib/          typed API client, realtime client, stores, theme, voice, utils
   server.mjs        single-origin proxy (dev + prod)
 deploy/nginx.conf   reverse proxy example
 docker-compose.yml  full stack
 scripts/            dev_setup, dev_api, fetch_chromium, smoke_e2e, smoke_controls, ui_snapshots
-docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, TESTING, JARVIS,
+docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, TESTING, ASSISTANT,
                     PRODUCTION_READINESS
 ```
 
@@ -146,7 +146,7 @@ docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, 
 * [docs/API.md](docs/API.md) — REST/WebSocket surface (full OpenAPI at `/api/docs`)
 * [docs/OPERATIONS.md](docs/OPERATIONS.md) — environments, deployment, scaling, backups, troubleshooting
 * [docs/TESTING.md](docs/TESTING.md) — test strategy and commands
-* [docs/JARVIS.md](docs/JARVIS.md) — HUD, voice, memory, customisation; Mark-LV feature mapping
+* [docs/ASSISTANT.md](docs/ASSISTANT.md) — AVINASH assistant: HUD, voice, memory, customisation; Mark-LV feature mapping
 * [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — implementation phases 1–15 and the final audit
 
 ## Non-negotiables baked into the design

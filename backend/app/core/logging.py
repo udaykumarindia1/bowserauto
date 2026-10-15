@@ -18,7 +18,9 @@ from typing import Any
 
 _log_context: ContextVar[dict[str, Any] | None] = ContextVar("log_context", default=None)
 
-SENSITIVE_KEYS = re.compile(r"(password|passwd|secret|token|cookie|authorization|api[_-]?key|session[_-]?id|set-cookie)", re.I)
+SENSITIVE_KEYS = re.compile(
+    r"(password|passwd|secret|token|cookie|authorization|api[_-]?key|session[_-]?id|set-cookie)", re.I
+)
 SENSITIVE_VALUE_PATTERNS = [
     re.compile(r"(Bearer\s+)[A-Za-z0-9\-_\.=]+", re.I),
     re.compile(r"(sk-[A-Za-z0-9]{8})[A-Za-z0-9\-_]+"),
@@ -30,7 +32,10 @@ def redact(value: Any, depth: int = 0) -> Any:
     if depth > 6:
         return "…"
     if isinstance(value, dict):
-        return {k: ("***" if isinstance(k, str) and SENSITIVE_KEYS.search(k) else redact(v, depth + 1)) for k, v in value.items()}
+        return {
+            k: ("***" if isinstance(k, str) and SENSITIVE_KEYS.search(k) else redact(v, depth + 1))
+            for k, v in value.items()
+        }
     if isinstance(value, (list, tuple)):
         return [redact(v, depth + 1) for v in value]
     if isinstance(value, str):

@@ -12,7 +12,7 @@ import { useJarvis } from "@/lib/jarvis-store";
 import { canWrite, toast, useAppStore } from "@/lib/store";
 import { formatDateTime } from "@/lib/utils";
 
-/** "🧠 WHAT JARVIS REMEMBERS" — view, add and delete stored facts (Mark-LV MemoryOverlay). */
+/** "🧠 WHAT AVINASH REMEMBERS" — view, add and delete stored facts (Mark-LV MemoryOverlay). */
 export function MemoryPanel({ className }: { className?: string }) {
   const queryClient = useQueryClient();
   const role = useAppStore((s) => s.auth?.role);

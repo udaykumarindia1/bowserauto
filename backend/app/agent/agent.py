@@ -89,7 +89,9 @@ class BrowserAgent:
             try:
                 decision = await self._decide(goal, inputs, snapshot, history)
             except LLMUnavailable as exc:
-                await self.ctx.log(f"AI provider unavailable: {exc}", level="warning", event_type="agent.thought")
+                await self.ctx.log(
+                    f"AI provider unavailable: {exc}", level="warning", event_type="agent.thought"
+                )
                 decision = self.planner.plan(goal, inputs, snapshot, history)
             tool_name = decision.get("tool", "")
             args = decision.get("args") or {}
@@ -99,13 +101,17 @@ class BrowserAgent:
             last_signature = signature
             if repeats >= 3:
                 reasoning = "Same action repeated without progress; stopping."
-                result = ToolResult(False, "The agent is stuck repeating the same action", done=True, status="failed")
+                result = ToolResult(
+                    False, "The agent is stuck repeating the same action", done=True, status="failed"
+                )
                 tool_name = "task.fail"
             else:
                 started = time.perf_counter()
                 result = await self.registry.execute(self.ctx, tool_name, args)
                 result.data.setdefault("duration_ms", int((time.perf_counter() - started) * 1000))
-            step = AgentStep(step_index, tool_name, redact(args), reasoning, result, int(result.data.get("duration_ms", 0)))
+            step = AgentStep(
+                step_index, tool_name, redact(args), reasoning, result, int(result.data.get("duration_ms", 0))
+            )
             history.append(step)
             if self.on_step:
                 await self.on_step(step)
@@ -116,16 +122,27 @@ class BrowserAgent:
                     raise HumanInterventionRequired(result.summary)
                 return AgentResult(status, result.summary, {**result.data, **self.ctx.state}, history)
             if consecutive_failures >= 6:
-                return AgentResult("failed", "Too many consecutive failed actions", dict(self.ctx.state), history)
-        return AgentResult("max_steps", f"Stopped after {self.max_steps} steps without completing the goal", dict(self.ctx.state), history)
+                return AgentResult(
+                    "failed", "Too many consecutive failed actions", dict(self.ctx.state), history
+                )
+        return AgentResult(
+            "max_steps",
+            f"Stopped after {self.max_steps} steps without completing the goal",
+            dict(self.ctx.state),
+            history,
+        )
 
-    async def _decide(self, goal: str, inputs: dict[str, Any], snapshot: PageSnapshot, history: list[AgentStep]) -> dict[str, Any]:
+    async def _decide(
+        self, goal: str, inputs: dict[str, Any], snapshot: PageSnapshot, history: list[AgentStep]
+    ) -> dict[str, Any]:
         if self.llm is None:
             return self.planner.plan(goal, inputs, snapshot, history)
         history_lines = []
         for step in history[-12:]:
             outcome = "ok" if step.result.ok else "FAILED"
-            history_lines.append(f"{step.index}. {step.tool}({json.dumps(step.args, default=str)[:200]}) -> {outcome}: {step.result.summary[:200]}")
+            history_lines.append(
+                f"{step.index}. {step.tool}({json.dumps(step.args, default=str)[:200]}) -> {outcome}: {step.result.summary[:200]}"
+            )
         user_prompt = (
             f"GOAL:\n{goal}\n\nINPUTS (use exactly when relevant):\n{json.dumps(inputs, default=str)[:4000]}\n\n"
             f"AVAILABLE TOOLS:\n{self.registry.describe()}\n\n"
@@ -134,13 +151,24 @@ class BrowserAgent:
         )
         images = [snapshot.screenshot_b64] if (self.use_vision and snapshot.screenshot_b64) else []
         response = await self.llm.complete(
-            [LLMMessage("system", SYSTEM_PROMPT), LLMMessage("user", user_prompt, images=images)], json_mode=True, max_tokens=800, temperature=0.1
+            [LLMMessage("system", SYSTEM_PROMPT), LLMMessage("user", user_prompt, images=images)],
+            json_mode=True,
+            max_tokens=800,
+            temperature=0.1,
         )
         try:
             decision = response.json()
         except ValueError:
             logger.warning("LLM returned non-JSON decision: %s", response.text[:200])
-            return {"tool": "browser.wait", "args": {"seconds": 2}, "reasoning": "Could not parse the model decision; waiting briefly."}
+            return {
+                "tool": "browser.wait",
+                "args": {"seconds": 2},
+                "reasoning": "Could not parse the model decision; waiting briefly.",
+            }
         if not isinstance(decision, dict) or "tool" not in decision:
-            return {"tool": "browser.wait", "args": {"seconds": 2}, "reasoning": "Invalid decision; waiting briefly."}
+            return {
+                "tool": "browser.wait",
+                "args": {"seconds": 2},
+                "reasoning": "Invalid decision; waiting briefly.",
+            }
         return decision

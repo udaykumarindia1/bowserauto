@@ -20,10 +20,20 @@ def _png_bytes(width: int = 4, height: int = 4) -> bytes:
     """A minimal valid PNG (so the upload passes magic-byte sniffing)."""
 
     def chunk(kind: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
 
     raw = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
 
 
 # --------------------------------------------------------------------------- projects
@@ -36,20 +46,29 @@ async def test_project_crud_and_script_analysis(client: ApiClient) -> None:
     assert all(s["prompt"] and s["status"] == "draft" for s in scenes)
 
     # Re-analyse with a new script and a target duration.
-    analysed = await client.post(f"/api/projects/{project['id']}/analyze", json={"script_text": "Scene 1: Sunrise.\nScene 2: Noon.\nScene 3: Dusk.", "clip_duration_seconds": 6})
+    analysed = await client.post(
+        f"/api/projects/{project['id']}/analyze",
+        json={"script_text": "Scene 1: Sunrise.\nScene 2: Noon.\nScene 3: Dusk.", "clip_duration_seconds": 6},
+    )
     assert analysed.status_code == 200, analysed.text
     body = analysed.json()
     assert body["method"] == "heuristic" and len(body["scenes"]) == 3
     assert all(s["duration_seconds"] <= 6 for s in body["scenes"])
 
-    updated = await client.patch(f"/api/projects/{project['id']}", json={"name": "Renamed", "description": "desc"})
+    updated = await client.patch(
+        f"/api/projects/{project['id']}", json={"name": "Renamed", "description": "desc"}
+    )
     assert updated.status_code == 200 and updated.json()["name"] == "Renamed"
     listed = (await client.get("/api/projects")).json()
     assert any(p["id"] == project["id"] and p["scene_count"] == 3 for p in listed)
     detail = (await client.get(f"/api/projects/{project['id']}")).json()
     assert detail["script_text"].startswith("Scene 1: Sunrise.")
     estimate = (await client.get(f"/api/projects/{project['id']}/estimate")).json()
-    assert estimate["scenes"] == 3 and estimate["estimated_wall_clock_seconds"] > 0 and estimate["output_seconds"] > 0
+    assert (
+        estimate["scenes"] == 3
+        and estimate["estimated_wall_clock_seconds"] > 0
+        and estimate["output_seconds"] > 0
+    )
 
     assert (await client.delete(f"/api/projects/{project['id']}")).status_code == 204
     assert (await client.get(f"/api/projects/{project['id']}")).status_code == 404
@@ -63,8 +82,15 @@ async def test_scene_editing_workflow(client: ApiClient) -> None:
     one, two, three = scenes
 
     # Edit prompt + duration.
-    edited = await client.patch(f"/api/projects/{pid}/scenes/{two['id']}", json={"prompt": "A custom prompt", "duration_seconds": 4, "title": "Second"})
-    assert edited.status_code == 200 and edited.json()["prompt"] == "A custom prompt" and edited.json()["duration_seconds"] == 4
+    edited = await client.patch(
+        f"/api/projects/{pid}/scenes/{two['id']}",
+        json={"prompt": "A custom prompt", "duration_seconds": 4, "title": "Second"},
+    )
+    assert (
+        edited.status_code == 200
+        and edited.json()["prompt"] == "A custom prompt"
+        and edited.json()["duration_seconds"] == 4
+    )
     # Regenerate the prompt from the scene fields.
     regenerated = await client.post(f"/api/projects/{pid}/scenes/{two['id']}/regenerate-prompt")
     assert regenerated.status_code == 200 and regenerated.json()["prompt"] != "A custom prompt"
@@ -80,30 +106,56 @@ async def test_scene_editing_workflow(client: ApiClient) -> None:
     assert reordered.status_code == 200 and [s["id"] for s in reordered.json()] == order
     assert reordered.json()[0]["code"] == "scene_001"
     # Change platform for one scene, add a scene after another, delete one.
-    assert (await client.patch(f"/api/projects/{pid}/scenes/{one['id']}", json={"platform_key": "runway"})).json()["platform_key"] == "runway"
-    added = await client.post(f"/api/projects/{pid}/scenes?after={one['id']}", json={"visual": "An added shot", "duration_seconds": 3})
+    assert (
+        await client.patch(f"/api/projects/{pid}/scenes/{one['id']}", json={"platform_key": "runway"})
+    ).json()["platform_key"] == "runway"
+    added = await client.post(
+        f"/api/projects/{pid}/scenes?after={one['id']}",
+        json={"visual": "An added shot", "duration_seconds": 3},
+    )
     assert added.status_code == 201 and added.json()["prompt"]
     assert (await client.delete(f"/api/projects/{pid}/scenes/{dup.json()['id']}")).status_code == 204
     final = await client.scenes(pid)
-    assert len(final) == 4 and [s["code"] for s in final] == ["scene_001", "scene_002", "scene_003", "scene_004"]
+    assert len(final) == 4 and [s["code"] for s in final] == [
+        "scene_001",
+        "scene_002",
+        "scene_003",
+        "scene_004",
+    ]
     assert final[2]["visual"] == "An added shot"
     # Invalid platform is rejected.
-    assert (await client.patch(f"/api/projects/{pid}/scenes/{one['id']}", json={"platform_key": "does-not-exist"})).status_code in (400, 422)
+    assert (
+        await client.patch(f"/api/projects/{pid}/scenes/{one['id']}", json={"platform_key": "does-not-exist"})
+    ).status_code in (400, 422)
 
 
 async def test_assets_characters_and_export(client: ApiClient) -> None:
     project = await client.create_project(script="Scene 1: Mira waves.")
     pid = project["id"]
     files = {"file": ("mira.png", _png_bytes(), "image/png")}
-    uploaded = await client.http.post(f"/api/projects/{pid}/assets", files=files, data={"kind": "character_reference"}, headers={"X-CSRF-Token": client.csrf})
+    uploaded = await client.http.post(
+        f"/api/projects/{pid}/assets",
+        files=files,
+        data={"kind": "character_reference"},
+        headers={"X-CSRF-Token": client.csrf},
+    )
     assert uploaded.status_code == 201, uploaded.text
     asset = uploaded.json()
     assert asset["mime_type"] == "image/png" and asset["size_bytes"] > 0 and asset["sha256"]
     # Fake image content is rejected even with an image extension.
-    bad = await client.http.post(f"/api/projects/{pid}/assets", files={"file": ("evil.png", b"<script>alert(1)</script>", "image/png")}, data={"kind": "reference"}, headers={"X-CSRF-Token": client.csrf})
+    bad = await client.http.post(
+        f"/api/projects/{pid}/assets",
+        files={"file": ("evil.png", b"<script>alert(1)</script>", "image/png")},
+        data={"kind": "reference"},
+        headers={"X-CSRF-Token": client.csrf},
+    )
     assert bad.status_code == 422, bad.text
     # Disallowed extension.
-    exe = await client.http.post(f"/api/projects/{pid}/assets", files={"file": ("tool.exe", b"MZ....", "application/octet-stream")}, headers={"X-CSRF-Token": client.csrf})
+    exe = await client.http.post(
+        f"/api/projects/{pid}/assets",
+        files={"file": ("tool.exe", b"MZ....", "application/octet-stream")},
+        headers={"X-CSRF-Token": client.csrf},
+    )
     assert exe.status_code == 422
     listed = (await client.get(f"/api/projects/{pid}/assets")).json()
     assert [a["id"] for a in listed] == [asset["id"]]
@@ -120,9 +172,17 @@ async def test_assets_characters_and_export(client: ApiClient) -> None:
         await anonymous.aclose()
 
     # Characters linked to the reference image flow into analysis.
-    character = await client.post(f"/api/projects/{pid}/characters", json={"name": "Mira", "description": "A sailor", "reference_asset_id": asset["id"]})
+    character = await client.post(
+        f"/api/projects/{pid}/characters",
+        json={"name": "Mira", "description": "A sailor", "reference_asset_id": asset["id"]},
+    )
     assert character.status_code == 201
-    assert (await client.patch(f"/api/projects/{pid}/characters/{character.json()['id']}", json={"name": "Mira", "description": "Captain"})).json()["description"] == "Captain"
+    assert (
+        await client.patch(
+            f"/api/projects/{pid}/characters/{character.json()['id']}",
+            json={"name": "Mira", "description": "Captain"},
+        )
+    ).json()["description"] == "Captain"
     analysed = (await client.post(f"/api/projects/{pid}/analyze", json={})).json()
     assert asset["id"] in analysed["scenes"][0]["reference_asset_ids"]
     assert "Mira" in analysed["scenes"][0]["characters"]
@@ -130,9 +190,15 @@ async def test_assets_characters_and_export(client: ApiClient) -> None:
     export = await client.get(f"/api/projects/{pid}/export")
     assert export.status_code == 200 and export.headers["content-type"].startswith("application/zip")
     names = zipfile.ZipFile(io.BytesIO(export.content)).namelist()
-    assert any(n.endswith("mira.png") for n in names) and "scenes/scenes.json" in names and "script/script.txt" in names
+    assert (
+        any(n.endswith("mira.png") for n in names)
+        and "scenes/scenes.json" in names
+        and "script/script.txt" in names
+    )
 
-    assert (await client.delete(f"/api/projects/{pid}/characters/{character.json()['id']}")).status_code == 204
+    assert (
+        await client.delete(f"/api/projects/{pid}/characters/{character.json()['id']}")
+    ).status_code == 204
     assert (await client.delete(f"/api/projects/{pid}/assets/{asset['id']}")).status_code == 204
     assert (await client.get(f"/api/projects/{pid}/assets")).json() == []
 
@@ -145,12 +211,24 @@ async def test_generated_files_listing_and_deletion(client: ApiClient, fake_site
     done = await client.wait_task(task["id"], {"completed", "failed"}, timeout=40)
     assert done["status"] == "completed", done
     page = (await client.get(f"/api/files?project_id={project['id']}")).json()
-    assert page["total"] == 2 and sorted(f["filename"] for f in page["items"]) == ["scene_001.mp4", "scene_002.mp4"]
+    assert page["total"] == 2 and sorted(f["filename"] for f in page["items"]) == [
+        "scene_001.mp4",
+        "scene_002.mp4",
+    ]
     first = page["items"][0]
-    assert first["status"] == "verified" and first["size_bytes"] > 0 and first["duration_seconds"] and first["download"]["url"].startswith("/api/files/signed/")
+    assert (
+        first["status"] == "verified"
+        and first["size_bytes"] > 0
+        and first["duration_seconds"]
+        and first["download"]["url"].startswith("/api/files/signed/")
+    )
     assert (await client.get(f"/api/files?task_id={task['id']}")).json()["total"] == 2
     detail = (await client.get(f"/api/files/{first['id']}")).json()
-    assert detail["id"] == first["id"] and detail["scene_id"] and detail["preview"]["url"].startswith("/api/files/signed/")
+    assert (
+        detail["id"] == first["id"]
+        and detail["scene_id"]
+        and detail["preview"]["url"].startswith("/api/files/signed/")
+    )
     url = (await client.get(f"/api/files/{first['id']}/url")).json()["url"]
     served = await client.get(url)
     assert served.status_code == 200 and served.content[4:8] == b"ftyp"
@@ -166,22 +244,56 @@ async def test_generated_files_listing_and_deletion(client: ApiClient, fake_site
 async def test_templates_platforms_notifications_dashboard(client: ApiClient, fake_sites) -> None:
     templates = (await client.get("/api/templates")).json()
     keys = {t["key"] for t in templates}
-    assert {"ai_video_generation", "image_generation", "research", "data_entry", "website_testing", "content_creation", "browser_workflow"} <= keys
+    assert {
+        "ai_video_generation",
+        "image_generation",
+        "research",
+        "data_entry",
+        "website_testing",
+        "content_creation",
+        "browser_workflow",
+    } <= keys
     builtin = next(t for t in templates if t["key"] == "ai_video_generation")
     assert builtin["is_builtin"] is True
     assert (await client.delete(f"/api/templates/{builtin['id']}")).status_code in (400, 403, 409)
-    created = await client.post("/api/templates", json={"key": "my-flow", "name": "My flow", "kind": "browser_workflow", "config": {"instructions": "Open the dashboard and export the report"}})
+    created = await client.post(
+        "/api/templates",
+        json={
+            "key": "my-flow",
+            "name": "My flow",
+            "kind": "browser_workflow",
+            "config": {"instructions": "Open the dashboard and export the report"},
+        },
+    )
     assert created.status_code == 201, created.text
     tid = created.json()["id"]
-    assert (await client.patch(f"/api/templates/{tid}", json={"name": "My flow v2"})).json()["name"] == "My flow v2"
+    assert (await client.patch(f"/api/templates/{tid}", json={"name": "My flow v2"})).json()[
+        "name"
+    ] == "My flow v2"
     assert (await client.post("/api/templates", json={"key": "my-flow", "name": "dup"})).status_code == 409
     assert (await client.delete(f"/api/templates/{tid}")).status_code == 204
 
     platforms = (await client.get("/api/platforms")).json()
     pkeys = {p["key"] for p in platforms}
-    assert {"google_flow", "runway", "kling", "luma", "hailuo", "pika", "pixverse", "vidu", "chatgpt", "gemini", "arena", "generic", "mock"} <= pkeys
+    assert {
+        "google_flow",
+        "runway",
+        "kling",
+        "luma",
+        "hailuo",
+        "pika",
+        "pixverse",
+        "vidu",
+        "chatgpt",
+        "gemini",
+        "arena",
+        "generic",
+        "mock",
+    } <= pkeys
     runway = (await client.get("/api/platforms/runway")).json()
-    assert runway["adapter_available"] and runway["requires_login"] and "generate" in runway["supported_actions"]
+    assert (
+        runway["adapter_available"] and runway["requires_login"] and "generate" in runway["supported_actions"]
+    )
     assert (await client.post("/api/platforms/runway/enabled", json={"enabled": False})).status_code == 200
     assert (await client.get("/api/platforms/runway")).json()["enabled"] is False
     assert (await client.get("/api/platforms/nope")).status_code == 404
@@ -200,7 +312,11 @@ async def test_templates_platforms_notifications_dashboard(client: ApiClient, fa
 
     dashboard = (await client.get("/api/dashboard")).json()
     assert dashboard["tasks"]["completed"] >= 1 and dashboard["projects"]["active"] >= 1
-    assert dashboard["sessions"]["total"] >= 0 and dashboard["files"]["count"] >= 1 and dashboard["usage_week"]["generation_seconds"] >= 0
+    assert (
+        dashboard["sessions"]["total"] >= 0
+        and dashboard["files"]["count"] >= 1
+        and dashboard["usage_week"]["generation_seconds"] >= 0
+    )
     activity = (await client.get("/api/activity?limit=20")).json()
     assert activity and all("event_type" in entry for entry in activity)
     assert (await client.get("/api/audit")).status_code == 200  # owner may read the audit log
@@ -209,22 +325,39 @@ async def test_templates_platforms_notifications_dashboard(client: ApiClient, fa
 async def test_settings_limits_and_members(client: ApiClient, other_client: ApiClient) -> None:
     settings = (await client.get("/api/settings")).json()
     assert settings["effective_limits"]["max_retries"] >= 1 and settings["llm"]["provider"]
-    tightened = await client.patch("/api/settings", json={"limits": {"max_retries": 1, "max_browser_sessions": 2}, "name": "Studio"})
+    tightened = await client.patch(
+        "/api/settings", json={"limits": {"max_retries": 1, "max_browser_sessions": 2}, "name": "Studio"}
+    )
     assert tightened.status_code == 200, tightened.text
-    assert tightened.json()["effective_limits"]["max_retries"] == 1 and tightened.json()["organization"]["name"] == "Studio"
+    assert (
+        tightened.json()["effective_limits"]["max_retries"] == 1
+        and tightened.json()["organization"]["name"] == "Studio"
+    )
     # Limits can only be tightened within the system range.
     assert (await client.patch("/api/settings", json={"limits": {"max_retries": 999}})).status_code == 422
     # LLM key is stored encrypted and never echoed back.
-    saved = await client.patch("/api/settings", json={"llm_provider": "openai", "llm_api_key": "sk-test-1234567890abcdef"})
-    assert saved.status_code == 200 and saved.json()["llm"]["has_api_key"] is True and "sk-test" not in saved.text
-    assert (await client.patch("/api/settings", json={"clear_llm_api_key": True, "llm_provider": "none"})).json()["llm"]["has_api_key"] is False
+    saved = await client.patch(
+        "/api/settings", json={"llm_provider": "openai", "llm_api_key": "sk-test-1234567890abcdef"}
+    )
+    assert (
+        saved.status_code == 200
+        and saved.json()["llm"]["has_api_key"] is True
+        and "sk-test" not in saved.text
+    )
+    assert (
+        await client.patch("/api/settings", json={"clear_llm_api_key": True, "llm_provider": "none"})
+    ).json()["llm"]["has_api_key"] is False
 
     members = (await client.get("/api/settings/members")).json()
     assert len(members) == 1 and members[0]["role"] == "owner"
-    added = await client.post("/api/settings/members", json={"email": other_client.user["email"], "role": "viewer"})
+    added = await client.post(
+        "/api/settings/members", json={"email": other_client.user["email"], "role": "viewer"}
+    )
     assert added.status_code == 201, added.text
     member_id = added.json()["id"]
-    assert (await client.patch(f"/api/settings/members/{member_id}", json={"role": "member"})).json()["role"] == "member"
+    assert (await client.patch(f"/api/settings/members/{member_id}", json={"role": "member"})).json()[
+        "role"
+    ] == "member"
     # The invited user now sees two organisations and can switch.
     status = (await other_client.get("/api/auth/me")).json()
     assert len(status["organizations"]) == 2
@@ -233,7 +366,10 @@ async def test_settings_limits_and_members(client: ApiClient, other_client: ApiC
     own = next(m for m in (await client.get("/api/settings/members")).json() if m["role"] == "owner")
     assert (await client.delete(f"/api/settings/members/{own['id']}")).status_code in (400, 409)
     # Members cannot change settings.
-    assert (await other_client.patch("/api/settings", json={"name": "Hijack"})).status_code in (403, 200)  # own org: ok
+    assert (await other_client.patch("/api/settings", json={"name": "Hijack"})).status_code in (
+        403,
+        200,
+    )  # own org: ok
 
 
 # ------------------------------------------------------------------------- security
@@ -252,7 +388,11 @@ async def test_tenant_isolation(client: ApiClient, other_client: ApiClient, fake
         f"/api/tasks/{task['id']}/screenshots",
     ):
         assert (await other_client.get(path)).status_code == 404, path
-    assert (await other_client.patch(f"/api/projects/{project['id']}/scenes/{scenes[0]['id']}", json={"prompt": "x"})).status_code == 404
+    assert (
+        await other_client.patch(
+            f"/api/projects/{project['id']}/scenes/{scenes[0]['id']}", json={"prompt": "x"}
+        )
+    ).status_code == 404
     assert (await other_client.post(f"/api/tasks/{task['id']}/stop")).status_code == 404
     assert (await other_client.delete(f"/api/sessions/{session['id']}")).status_code == 404
     assert all(p["id"] != project["id"] for p in (await other_client.get("/api/projects")).json())
@@ -271,11 +411,17 @@ async def test_csrf_and_cookie_protection(client: ApiClient, anon: ApiClient) ->
     wrong = await client.http.post("/api/projects", json={"name": "x"}, headers={"X-CSRF-Token": "nope"})
     assert wrong.status_code == 403
     # Cross-origin browser requests are refused.
-    cross = await client.http.post("/api/projects", json={"name": "x"}, headers={"X-CSRF-Token": client.csrf, "Origin": "https://evil.example"})
+    cross = await client.http.post(
+        "/api/projects",
+        json={"name": "x"},
+        headers={"X-CSRF-Token": client.csrf, "Origin": "https://evil.example"},
+    )
     assert cross.status_code == 403
     # Anonymous access is unauthorized; cookies are HttpOnly.
     assert (await anon.get("/api/projects")).status_code == 401
-    login = await anon.http.post("/api/auth/login", json={"email": client.user["email"], "password": "wrong-password"})
+    login = await anon.http.post(
+        "/api/auth/login", json={"email": client.user["email"], "password": "wrong-password"}
+    )
     assert login.status_code == 401
     cookie_header = ""
     for name in ("set-cookie",):
@@ -288,7 +434,9 @@ async def test_csrf_and_cookie_protection(client: ApiClient, anon: ApiClient) ->
 
 
 async def test_viewer_role_is_read_only(client: ApiClient, other_client: ApiClient) -> None:
-    added = await client.post("/api/settings/members", json={"email": other_client.user["email"], "role": "viewer"})
+    added = await client.post(
+        "/api/settings/members", json={"email": other_client.user["email"], "role": "viewer"}
+    )
     assert added.status_code == 201
     switched = await other_client.post(f"/api/auth/switch-organization/{client.organization['id']}")
     assert switched.status_code == 200, switched.text
@@ -296,7 +444,11 @@ async def test_viewer_role_is_read_only(client: ApiClient, other_client: ApiClie
     project = await client.create_project(script="Scene 1: Read only.")
     assert (await other_client.get(f"/api/projects/{project['id']}")).status_code == 200
     assert (await other_client.post("/api/projects", json={"name": "nope"})).status_code == 403
-    assert (await other_client.patch(f"/api/projects/{project['id']}", json={"name": "nope"})).status_code == 403
+    assert (
+        await other_client.patch(f"/api/projects/{project['id']}", json={"name": "nope"})
+    ).status_code == 403
     assert (await other_client.post("/api/tasks", json={"project_id": project["id"]})).status_code == 403
-    assert (await other_client.post("/api/sessions", json={"name": "nope", "platform_key": "mock"})).status_code == 403
+    assert (
+        await other_client.post("/api/sessions", json={"name": "nope", "platform_key": "mock"})
+    ).status_code == 403
     assert (await other_client.get("/api/audit")).status_code == 403

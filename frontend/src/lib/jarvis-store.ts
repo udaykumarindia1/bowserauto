@@ -38,9 +38,11 @@ export interface JarvisPrefs {
 }
 
 const PREFS_KEY = "ba.jarvis";
+/** Former default names: a stored value equal to one of these is treated as "not customised". */
+const LEGACY_DEFAULT_NAMES = new Set(["JARVIS"]);
 
 export const DEFAULT_PREFS: JarvisPrefs = {
-  assistantName: "JARVIS",
+  assistantName: "AVINASH",
   userName: "",
   voiceURI: null,
   ttsEnabled: true,
@@ -54,7 +56,10 @@ function loadPrefs(): JarvisPrefs {
   if (typeof window === "undefined") return DEFAULT_PREFS;
   try {
     const raw = window.localStorage.getItem(PREFS_KEY);
-    return raw ? { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<JarvisPrefs>) } : DEFAULT_PREFS;
+    if (!raw) return DEFAULT_PREFS;
+    const stored = JSON.parse(raw) as Partial<JarvisPrefs>;
+    if (typeof stored.assistantName === "string" && LEGACY_DEFAULT_NAMES.has(stored.assistantName.trim())) delete stored.assistantName;
+    return { ...DEFAULT_PREFS, ...stored };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -135,7 +140,7 @@ export const useJarvis = create<JarvisState>((set, get) => ({
     const local = loadPrefs();
     const merged: JarvisPrefs = { ...local };
     if (remote) {
-      if (typeof remote.assistant_name === "string" && remote.assistant_name) merged.assistantName = remote.assistant_name;
+      if (typeof remote.assistant_name === "string" && remote.assistant_name && !LEGACY_DEFAULT_NAMES.has(remote.assistant_name.trim())) merged.assistantName = remote.assistant_name;
       if (typeof remote.user_name === "string") merged.userName = remote.user_name;
       if (typeof remote.voice_uri === "string" || remote.voice_uri === null) merged.voiceURI = (remote.voice_uri as string | null) ?? merged.voiceURI;
       if (typeof remote.tts_enabled === "boolean") merged.ttsEnabled = remote.tts_enabled;

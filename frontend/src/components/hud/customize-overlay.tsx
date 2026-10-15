@@ -60,7 +60,7 @@ export function CustomizeOverlay() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const name = assistantName.trim().slice(0, 30) || "JARVIS";
+      const name = assistantName.trim().slice(0, 30) || "AVINASH";
       const who = userName.trim().slice(0, 40);
       const colour = normalizeHex(hex) ?? DEFAULT_ACCENT;
       applyAccent(colour);
@@ -94,7 +94,7 @@ export function CustomizeOverlay() {
           <div className="space-y-4">
             <label className="block space-y-1">
               <span className="hud-label">Assistant name</span>
-              <input className="hud-input" value={assistantName} maxLength={30} onChange={(e) => setAssistantName(e.target.value)} placeholder="JARVIS" />
+              <input className="hud-input" value={assistantName} maxLength={30} onChange={(e) => setAssistantName(e.target.value)} placeholder="AVINASH" />
             </label>
             <label className="block space-y-1">
               <span className="hud-label">Your name (leave blank for &ldquo;sir&rdquo;)</span>
@@ -112,7 +112,7 @@ export function CustomizeOverlay() {
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="border border-border px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:bg-hud-ghost" onClick={() => speak(`${assistantName || "JARVIS"} online, ${userName || "sir"}. Systems nominal.`, { voiceURI, rate })}>
+                  <button type="button" className="border border-border px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-primary hover:bg-hud-ghost" onClick={() => speak(`${assistantName || "AVINASH"} online, ${userName || "sir"}. Systems nominal.`, { voiceURI, rate })}>
                     Test
                   </button>
                 </div>

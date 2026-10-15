@@ -66,7 +66,13 @@ class ScreencastStreamer:
                 self._cdp.on("Page.screencastFrame", self._handle_frame)
                 await self._cdp.send(
                     "Page.startScreencast",
-                    {"format": "jpeg", "quality": self.settings.stream_quality, "maxWidth": self.settings.stream_max_width, "maxHeight": 1600, "everyNthFrame": 1},
+                    {
+                        "format": "jpeg",
+                        "quality": self.settings.stream_quality,
+                        "maxWidth": self.settings.stream_max_width,
+                        "maxHeight": 1600,
+                        "everyNthFrame": 1,
+                    },
                 )
             except Exception as exc:
                 logger.warning("Could not start screencast: %s", exc)
@@ -113,7 +119,11 @@ class ScreencastStreamer:
 
     async def _flush_later(self, seq: int) -> None:
         await asyncio.sleep(self._min_interval)
-        if self._last_frame and self._last_frame["seq"] == seq and time.monotonic() - self._last_sent >= self._min_interval:
+        if (
+            self._last_frame
+            and self._last_frame["seq"] == seq
+            and time.monotonic() - self._last_sent >= self._min_interval
+        ):
             await self._publish(self._last_frame)
 
     async def _publish(self, frame: dict[str, Any]) -> None:
@@ -130,8 +140,22 @@ class ScreencastStreamer:
             data = await page.screenshot(type="jpeg", quality=self.settings.stream_quality, timeout=10_000)
             import base64
 
-            size = page.viewport_size or {"width": self.settings.browser_viewport_width, "height": self.settings.browser_viewport_height}
-            frame = {"type": "frame", "session_id": self.session_id, "seq": self._seq, "data": base64.b64encode(data).decode(), "width": size["width"], "height": size["height"], "page_scale": 1, "scroll_x": 0, "scroll_y": 0, "ts": time.time()}
+            size = page.viewport_size or {
+                "width": self.settings.browser_viewport_width,
+                "height": self.settings.browser_viewport_height,
+            }
+            frame = {
+                "type": "frame",
+                "session_id": self.session_id,
+                "seq": self._seq,
+                "data": base64.b64encode(data).decode(),
+                "width": size["width"],
+                "height": size["height"],
+                "page_scale": 1,
+                "scroll_x": 0,
+                "scroll_y": 0,
+                "ts": time.time(),
+            }
             self._seq += 1
             await self._publish(frame)
         except Exception as exc:

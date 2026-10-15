@@ -27,7 +27,13 @@ _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 def ensure_data_dirs() -> None:
     """Create the data directory tree (idempotent)."""
     settings = get_settings()
-    for path in (settings.resolved_data_dir, settings.projects_dir, settings.profiles_dir, settings.screenshots_dir, settings.tmp_dir):
+    for path in (
+        settings.resolved_data_dir,
+        settings.projects_dir,
+        settings.profiles_dir,
+        settings.screenshots_dir,
+        settings.tmp_dir,
+    ):
         path.mkdir(parents=True, exist_ok=True)
     try:
         settings.profiles_dir.chmod(0o700)
@@ -60,7 +66,11 @@ def safe_filename(name: str, default: str = "file") -> str:
 def resolve_inside(base: Path, candidate: str | Path) -> Path:
     """Resolve ``candidate`` and make sure it stays inside ``base`` (prevents path traversal)."""
     base_resolved = base.resolve()
-    target = (base_resolved / candidate).resolve() if not Path(candidate).is_absolute() else Path(candidate).resolve()
+    target = (
+        (base_resolved / candidate).resolve()
+        if not Path(candidate).is_absolute()
+        else Path(candidate).resolve()
+    )
     try:
         target.relative_to(base_resolved)
     except ValueError as exc:
@@ -80,12 +90,16 @@ def unique_path(path: Path) -> Path:
     raise FileExistsError(f"Could not find a free filename for {path}")
 
 
-def format_scene_filename(pattern: str, *, index: int, code: str, project_name: str, platform: str, ext: str) -> str:
+def format_scene_filename(
+    pattern: str, *, index: int, code: str, project_name: str, platform: str, ext: str
+) -> str:
     """Render a filename pattern such as ``scene_{index:03d}.mp4``."""
     pattern = pattern or "scene_{index:03d}{ext}"
     ext = ext if ext.startswith(".") else f".{ext}"
     try:
-        rendered = pattern.format(index=index, code=code, project=safe_filename(project_name, "project"), platform=platform, ext=ext)
+        rendered = pattern.format(
+            index=index, code=code, project=safe_filename(project_name, "project"), platform=platform, ext=ext
+        )
     except (KeyError, IndexError, ValueError):
         rendered = f"scene_{index:03d}{ext}"
     if not rendered.lower().endswith(ext.lower()):

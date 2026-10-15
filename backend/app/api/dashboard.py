@@ -20,7 +20,9 @@ async def dashboard(auth: CurrentAuth, db: DB) -> dict:
     data["active_tasks"] = [TaskOut.model_validate(t) for t in data["active_tasks"]]
     data["recent_tasks"] = [TaskOut.model_validate(t) for t in data["recent_tasks"]]
     data["recent_activity"] = [ActivityLogOut.model_validate(a) for a in data["recent_activity"]]
-    data["recent_files"] = [GeneratedFileOut.model_validate(f).model_dump(by_alias=True) for f in data["recent_files"]]
+    data["recent_files"] = [
+        GeneratedFileOut.model_validate(f).model_dump(by_alias=True) for f in data["recent_files"]
+    ]
     return data
 
 

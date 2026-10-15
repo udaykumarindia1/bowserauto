@@ -16,11 +16,15 @@ class ArenaAdapter(ChatPlatformAdapter):
     notes = "Open the browser session, pick the model/mode you want and sign in if required; the adapter reuses the current chat."
     selectors: ClassVar[dict[str, Any]] = {
         "login_indicator": {"any": [{"role": "button", "name": "/sign in|log in/i"}]},
-        "prompt_input": {"any": [{"css": "textarea"}, {"role": "textbox"}, {"css": "[contenteditable='true']"}]},
+        "prompt_input": {
+            "any": [{"css": "textarea"}, {"role": "textbox"}, {"css": "[contenteditable='true']"}]
+        },
         "upload": {"any": [{"css": "input[type=file]"}, {"role": "button", "name": "/attach|upload/i"}]},
         "send_button": {"any": [{"role": "button", "name": "/send/i"}, {"css": "button[type=submit]"}]},
         "streaming_indicator": {"role": "button", "name": "/stop/i"},
-        "assistant_message": {"css": "[data-role='assistant'], [data-message-author-role='assistant'], .assistant-message, article"},
+        "assistant_message": {
+            "css": "[data-role='assistant'], [data-message-author-role='assistant'], .assistant-message, article"
+        },
     }
 
     def answer_script(self) -> str:

@@ -40,7 +40,10 @@ async def test_register_login_logout_cycle(anon: ApiClient) -> None:
 
 
 async def test_weak_password_rejected(anon: ApiClient) -> None:
-    response = await anon.post("/api/auth/register", json={"email": f"{uuid.uuid4().hex[:8]}@example.com", "password": "short", "full_name": "x"})
+    response = await anon.post(
+        "/api/auth/register",
+        json={"email": f"{uuid.uuid4().hex[:8]}@example.com", "password": "short", "full_name": "x"},
+    )
     assert response.status_code == 422
     assert response.json()["error"]["code"] in ("validation_error", "validation_failed")
 
@@ -51,12 +54,16 @@ async def test_csrf_required_for_cookie_auth(client: ApiClient) -> None:
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "csrf_failed"
     # ...and also with a bogus token.
-    response = await client.post("/api/projects", json={"name": "Bad CSRF"}, csrf=False, headers={"X-CSRF-Token": "nope"})
+    response = await client.post(
+        "/api/projects", json={"name": "Bad CSRF"}, csrf=False, headers={"X-CSRF-Token": "nope"}
+    )
     assert response.status_code == 403
     # Reads are fine without it.
     assert (await client.get("/api/projects", csrf=False)).status_code == 200
     # Cross-site origin is rejected even with a valid token.
-    response = await client.post("/api/projects", json={"name": "Evil"}, headers={"Origin": "https://evil.example"})
+    response = await client.post(
+        "/api/projects", json={"name": "Evil"}, headers={"Origin": "https://evil.example"}
+    )
     assert response.status_code == 403
 
 
@@ -73,7 +80,9 @@ async def test_tenant_isolation(client: ApiClient, other_client: ApiClient) -> N
     session = await client.create_session(open=False)
     # The other organisation cannot see or touch these resources.
     assert (await other_client.get(f"/api/projects/{project['id']}")).status_code == 404
-    assert (await other_client.patch(f"/api/projects/{project['id']}", json={"name": "hijack"})).status_code == 404
+    assert (
+        await other_client.patch(f"/api/projects/{project['id']}", json={"name": "hijack"})
+    ).status_code == 404
     assert (await other_client.get(f"/api/sessions/{session['id']}")).status_code == 404
     assert (await other_client.delete(f"/api/projects/{project['id']}")).status_code == 404
     listing = await other_client.get("/api/projects")
@@ -84,7 +93,9 @@ async def test_member_roles(client: ApiClient, anon: ApiClient) -> None:
     # Members must have an account first; the owner then adds them with a role.
     viewer = await anon.register(full_name="Viewer")
     viewer_email = viewer["user"]["email"]
-    assert (await client.post("/api/settings/members", json={"email": viewer_email, "role": "owner"})).status_code == 422
+    assert (
+        await client.post("/api/settings/members", json={"email": viewer_email, "role": "owner"})
+    ).status_code == 422
     created = await client.post("/api/settings/members", json={"email": viewer_email, "role": "viewer"})
     assert created.status_code == 201, created.text
     members = (await client.get("/api/settings/members")).json()
@@ -100,19 +111,28 @@ async def test_member_roles(client: ApiClient, anon: ApiClient) -> None:
     denied = await anon.post("/api/projects", json={"name": "viewer project"})
     assert denied.status_code == 403
     assert denied.json()["error"]["code"] == "forbidden"
-    assert (await anon.post("/api/settings/members", json={"email": "x@example.com", "role": "viewer"})).status_code == 403
+    assert (
+        await anon.post("/api/settings/members", json={"email": "x@example.com", "role": "viewer"})
+    ).status_code == 403
     # Promote to member → can create projects; the owner's role is immutable.
     member_id = next(m["id"] for m in members if m["email"] == viewer_email)
-    assert (await client.patch(f"/api/settings/members/{member_id}", json={"role": "member"})).status_code == 200
+    assert (
+        await client.patch(f"/api/settings/members/{member_id}", json={"role": "member"})
+    ).status_code == 200
     assert (await anon.post("/api/projects", json={"name": "member project"})).status_code == 201
     owner_id = next(m["id"] for m in members if m["role"] == "owner")
-    assert (await client.patch(f"/api/settings/members/{owner_id}", json={"role": "viewer"})).status_code == 409
+    assert (
+        await client.patch(f"/api/settings/members/{owner_id}", json={"role": "viewer"})
+    ).status_code == 409
     # Removal revokes access: the user falls back to their own organisation.
     assert (await client.delete(f"/api/settings/members/{member_id}")).status_code == 204
     me = await anon.get("/api/auth/me")
     assert me.status_code == 200
     assert me.json()["organization"]["id"] != client.organization["id"]
-    assert (await anon.post(f"/api/auth/switch-organization/{client.organization['id']}")).status_code in (403, 404)
+    assert (await anon.post(f"/api/auth/switch-organization/{client.organization['id']}")).status_code in (
+        403,
+        404,
+    )
 
 
 async def test_auth_sessions_listing_and_revoke(client: ApiClient) -> None:
@@ -128,7 +148,10 @@ async def test_auth_sessions_listing_and_revoke(client: ApiClient) -> None:
 
 async def test_change_password(client: ApiClient, anon: ApiClient) -> None:
     email = client.user["email"]
-    response = await client.post("/api/auth/change-password", json={"current_password": PASSWORD, "new_password": PASSWORD + "-rotated"})
+    response = await client.post(
+        "/api/auth/change-password",
+        json={"current_password": PASSWORD, "new_password": PASSWORD + "-rotated"},
+    )
     assert response.status_code in (200, 204), response.text
     assert (await anon.login(email, PASSWORD)).status_code == 401
     assert (await anon.login(email, PASSWORD + "-rotated")).status_code == 200

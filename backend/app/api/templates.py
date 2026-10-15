@@ -34,8 +34,12 @@ async def get_template(template_id: uuid.UUID, auth: CurrentAuth, db: DB) -> Tem
 
 
 @router.patch("/{template_id}", response_model=TemplateOut)
-async def update_template(template_id: uuid.UUID, payload: TemplateUpdate, auth: CurrentAuth, db: DB, _: Writer) -> TemplateOut:
-    template = await template_service.update_template(db, auth.org_id, template_id, payload.model_dump(exclude_unset=True, exclude_none=True))
+async def update_template(
+    template_id: uuid.UUID, payload: TemplateUpdate, auth: CurrentAuth, db: DB, _: Writer
+) -> TemplateOut:
+    template = await template_service.update_template(
+        db, auth.org_id, template_id, payload.model_dump(exclude_unset=True, exclude_none=True)
+    )
     await db.commit()
     return TemplateOut.model_validate(template)
 

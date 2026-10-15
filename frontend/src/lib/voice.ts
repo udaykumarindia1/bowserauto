@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Browser voice I/O for the JARVIS console.
+ * Browser voice I/O for the AVINASH console.
  *
  * - Speech recognition uses the Web Speech API (Chrome/Edge/Safari). It runs entirely in
  *   the user's browser; nothing is streamed to our backend except the final transcript the
@@ -133,11 +133,19 @@ export function createRecognizer(options: RecognizerOptions): Recognizer | null 
   };
 }
 
-/** Wake-word detection on a transcript, tolerant of common mis-hearings ("hey jarvis", "a jarvis", "jarvis"). */
+/** Common speech-recognition mis-hearings of assistant names, keyed by the normalised name. */
+const WAKE_ALIASES: Record<string, string[]> = {
+  avinash: ["avinash", "avi nash", "abhinash", "abinash", "avinaash", "avinas", "avinesh", "avanash"],
+  jarvis: ["jarvis", "jarves", "jervis", "travis"],
+};
+
+/** Wake-word detection on a transcript, tolerant of common mis-hearings ("hey avinash", "a avinash", "abhinash"). */
 export function matchWakeWord(transcript: string, name: string): string | null {
   const lowered = transcript.toLowerCase().trim();
-  const target = name.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim() || "jarvis";
-  const pattern = new RegExp(`\\b(?:hey|hi|ok|okay|yo|a|hay)?\\s*${target.replace(/\s+/g, "\\s*")}\\b[,.!?]?\\s*(.*)$`, "i");
+  const target = name.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim() || "avinash";
+  const variants = Array.from(new Set([target, ...(WAKE_ALIASES[target.replace(/\s+/g, "")] ?? [])]));
+  const alternatives = variants.map((v) => v.replace(/\s+/g, "\\s*")).join("|");
+  const pattern = new RegExp(`\\b(?:hey|hi|ok|okay|yo|a|hay)?\\s*(?:${alternatives})\\b[,.!?]?\\s*(.*)$`, "i");
   const m = lowered.match(pattern);
   if (!m) return null;
   return (m[1] ?? "").trim();

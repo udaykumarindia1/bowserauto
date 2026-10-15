@@ -84,7 +84,13 @@ class TaskStatus(str, enum.Enum):
 
     @property
     def is_active(self) -> bool:
-        return self in (TaskStatus.queued, TaskStatus.running, TaskStatus.paused, TaskStatus.waiting_for_human, TaskStatus.needs_attention)
+        return self in (
+            TaskStatus.queued,
+            TaskStatus.running,
+            TaskStatus.paused,
+            TaskStatus.waiting_for_human,
+            TaskStatus.needs_attention,
+        )
 
 
 class TaskControl(str, enum.Enum):
@@ -150,7 +156,9 @@ class User(Base, UUIDMixin, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     preferences: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
-    memberships: Mapped[list[OrganizationMember]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    memberships: Mapped[list[OrganizationMember]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Organization(Base, UUIDMixin, TimestampMixin):
@@ -163,15 +171,21 @@ class Organization(Base, UUIDMixin, TimestampMixin):
     secrets_encrypted: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
     limits: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
-    members: Mapped[list[OrganizationMember]] = relationship(back_populates="organization", cascade="all, delete-orphan")
+    members: Mapped[list[OrganizationMember]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
 
 
 class OrganizationMember(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "organization_members"
     __table_args__ = (UniqueConstraint("organization_id", "user_id", name="uq_org_member"),)
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
     role: Mapped[str] = mapped_column(String(20), default=OrgRole.member.value, nullable=False)
 
     organization: Mapped[Organization] = relationship(back_populates="members")
@@ -183,7 +197,9 @@ class AuthSession(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "auth_sessions"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -196,8 +212,12 @@ class AuthSession(Base, UUIDMixin, TimestampMixin):
 class Project(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "projects"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     template_key: Mapped[str] = mapped_column(String(60), default="ai_video_generation", nullable=False)
@@ -210,19 +230,27 @@ class Project(Base, UUIDMixin, TimestampMixin):
     folder_path: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    scenes: Mapped[list[Scene]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Scene.index")
+    scenes: Mapped[list[Scene]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="Scene.index"
+    )
     characters: Mapped[list[Character]] = relationship(back_populates="project", cascade="all, delete-orphan")
 
 
 class Character(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "characters"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     voice_style: Mapped[str] = mapped_column(String(200), default="", nullable=False)
-    reference_asset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    reference_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
+    )
 
     project: Mapped[Project] = relationship(back_populates="characters")
 
@@ -230,9 +258,15 @@ class Character(Base, UUIDMixin, TimestampMixin):
 class Asset(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "assets"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True)
-    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     kind: Mapped[str] = mapped_column(String(40), default="reference", nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(String(600), nullable=False)
@@ -246,8 +280,12 @@ class Scene(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "scenes"
     __table_args__ = (Index("ix_scenes_project_index", "project_id", "index"),)
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
     index: Mapped[int] = mapped_column(Integer, nullable=False)
     code: Mapped[str] = mapped_column(String(40), nullable=False)
     title: Mapped[str] = mapped_column(String(200), default="", nullable=False)
@@ -262,7 +300,9 @@ class Scene(Base, UUIDMixin, TimestampMixin):
     negative_prompt: Mapped[str] = mapped_column(Text, default="", nullable=False)
     platform_key: Mapped[str | None] = mapped_column(String(60), nullable=True)
     reference_asset_ids: Mapped[list[Any]] = mapped_column(JSONType, default=list, nullable=False)
-    status: Mapped[str] = mapped_column(String(30), default=SceneStatus.draft.value, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(30), default=SceneStatus.draft.value, nullable=False, index=True
+    )
     retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
     generated_file_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -278,17 +318,27 @@ class Task(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "tasks"
     __table_args__ = (Index("ix_tasks_queue", "status", "priority", "queued_at"),)
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), default="video_generation", nullable=False)
     instructions: Mapped[str] = mapped_column(Text, default="", nullable=False)
-    status: Mapped[str] = mapped_column(String(30), default=TaskStatus.draft.value, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(30), default=TaskStatus.draft.value, nullable=False, index=True
+    )
     control: Mapped[str] = mapped_column(String(30), default=TaskControl.none.value, nullable=False)
     human_control: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     platform_key: Mapped[str] = mapped_column(String(60), default="mock", nullable=False)
-    browser_session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("browser_sessions.id", ondelete="SET NULL"), nullable=True)
+    browser_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("browser_sessions.id", ondelete="SET NULL"), nullable=True
+    )
     config: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
     progress: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
     attention: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
@@ -305,14 +355,20 @@ class Task(Base, UUIDMixin, TimestampMixin):
     error: Mapped[str] = mapped_column(Text, default="", nullable=False)
     result: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
-    steps: Mapped[list[TaskStep]] = relationship(back_populates="task", cascade="all, delete-orphan", order_by="TaskStep.index")
+    steps: Mapped[list[TaskStep]] = relationship(
+        back_populates="task", cascade="all, delete-orphan", order_by="TaskStep.index"
+    )
 
 
 class TaskStep(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "task_steps"
 
-    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=False)
-    scene_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True)
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    scene_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True
+    )
     index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
@@ -330,13 +386,19 @@ class TaskStep(Base, UUIDMixin, TimestampMixin):
 class BrowserSession(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "browser_sessions"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     platform_key: Mapped[str] = mapped_column(String(60), default="generic", nullable=False)
     browser_type: Mapped[str] = mapped_column(String(30), default="chromium", nullable=False)
     profile_dir: Mapped[str] = mapped_column(String(600), nullable=False)
-    status: Mapped[str] = mapped_column(String(30), default=BrowserSessionStatus.closed.value, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(30), default=BrowserSessionStatus.closed.value, nullable=False, index=True
+    )
     desired_state: Mapped[str] = mapped_column(String(20), default="closed", nullable=False)
     interactive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     login_status: Mapped[str] = mapped_column(String(20), default="unknown", nullable=False)
@@ -370,9 +432,15 @@ class Platform(Base, UUIDMixin, TimestampMixin):
 class AgentRun(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "agent_runs"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=True)
-    scene_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    scene_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True
+    )
     browser_session_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     goal: Mapped[str] = mapped_column(Text, default="", nullable=False)
     mode: Mapped[str] = mapped_column(String(30), default="adapter", nullable=False)
@@ -384,14 +452,20 @@ class AgentRun(Base, UUIDMixin, TimestampMixin):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    actions: Mapped[list[AgentAction]] = relationship(back_populates="run", cascade="all, delete-orphan", order_by="AgentAction.index")
+    actions: Mapped[list[AgentAction]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="AgentAction.index"
+    )
 
 
 class AgentAction(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "agent_actions"
 
-    agent_run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True, nullable=False)
-    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=True)
+    agent_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tool: Mapped[str] = mapped_column(String(80), nullable=False)
     arguments: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
@@ -409,10 +483,18 @@ class AgentAction(Base, UUIDMixin, TimestampMixin):
 class GeneratedFile(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "generated_files"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True)
-    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), index=True, nullable=True)
-    scene_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    scene_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True
+    )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(String(600), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(120), default="video/mp4", nullable=False)
@@ -432,8 +514,12 @@ class GeneratedFile(Base, UUIDMixin, TimestampMixin):
 class Screenshot(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "screenshots"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     browser_session_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     scene_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     stage: Mapped[str] = mapped_column(String(60), nullable=False)
@@ -448,7 +534,9 @@ class ActivityLog(Base, UUIDMixin):
     __tablename__ = "activity_logs"
     __table_args__ = (Index("ix_activity_org_created", "organization_id", "created_at"),)
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
     task_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), index=True, nullable=True)
     project_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     browser_session_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -464,8 +552,12 @@ class ActivityLog(Base, UUIDMixin):
 class Notification(Base, UUIDMixin):
     __tablename__ = "notifications"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     type: Mapped[str] = mapped_column(String(60), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), default="info", nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -484,8 +576,12 @@ class MemoryFact(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "memory_facts"
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     category: Mapped[str] = mapped_column(String(40), default="notes", nullable=False)
     key: Mapped[str] = mapped_column(String(120), nullable=False)
     value: Mapped[str] = mapped_column(Text, nullable=False)
@@ -495,7 +591,9 @@ class MemoryFact(Base, UUIDMixin, TimestampMixin):
 class Template(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "templates"
 
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     key: Mapped[str] = mapped_column(String(80), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)

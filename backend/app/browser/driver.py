@@ -85,9 +85,19 @@ class PageSnapshot:
         return None
 
     def as_prompt(self, max_elements: int = 80, max_text: int = 2500) -> str:
-        lines = [f"URL: {self.url}", f"TITLE: {self.title}", f"SCROLL: {self.scroll[0]}px of {self.scroll[2]}px (viewport {self.scroll[1]}px)"]
+        lines = [
+            f"URL: {self.url}",
+            f"TITLE: {self.title}",
+            f"SCROLL: {self.scroll[0]}px of {self.scroll[2]}px (viewport {self.scroll[1]}px)",
+        ]
         if self.tabs:
-            lines.append("TABS: " + "; ".join(f"{t.get('index')}:{t.get('title','')[:40]}{' *' if t.get('active') else ''}" for t in self.tabs))
+            lines.append(
+                "TABS: "
+                + "; ".join(
+                    f"{t.get('index')}:{t.get('title', '')[:40]}{' *' if t.get('active') else ''}"
+                    for t in self.tabs
+                )
+            )
         lines.append("INTERACTIVE ELEMENTS:")
         for el in self.elements[:max_elements]:
             lines.append("  " + el.describe())
@@ -119,17 +129,31 @@ class BrowserDriver(Protocol):
     async def title(self) -> str: ...
 
     # interaction -----------------------------------------------------------------
-    async def click(self, target: TargetSpec, *, timeout_ms: int | None = None, force: bool = False) -> None: ...
-    async def type(self, target: TargetSpec, text: str, *, clear: bool = True, press_enter: bool = False, delay_ms: int = 0) -> None: ...
+    async def click(
+        self, target: TargetSpec, *, timeout_ms: int | None = None, force: bool = False
+    ) -> None: ...
+    async def type(
+        self,
+        target: TargetSpec,
+        text: str,
+        *,
+        clear: bool = True,
+        press_enter: bool = False,
+        delay_ms: int = 0,
+    ) -> None: ...
     async def press(self, key: str, target: TargetSpec | None = None) -> None: ...
     async def select_option(self, target: TargetSpec, value: str) -> None: ...
-    async def scroll(self, direction: str = "down", amount: int = 600, target: TargetSpec | None = None) -> None: ...
+    async def scroll(
+        self, direction: str = "down", amount: int = 600, target: TargetSpec | None = None
+    ) -> None: ...
     async def upload(self, target: TargetSpec | None, files: list[Path]) -> None: ...
     async def hover(self, target: TargetSpec) -> None: ...
 
     # observation -----------------------------------------------------------------
     async def exists(self, target: TargetSpec, *, timeout_ms: int = 0) -> bool: ...
-    async def wait_for(self, target: TargetSpec, *, state: str = "visible", timeout_ms: int | None = None) -> bool: ...
+    async def wait_for(
+        self, target: TargetSpec, *, state: str = "visible", timeout_ms: int | None = None
+    ) -> bool: ...
     async def wait_for_text(self, text: str, *, timeout_ms: int | None = None) -> bool: ...
     async def wait_for_url(self, pattern: str, *, timeout_ms: int | None = None) -> bool: ...
     async def wait_for_load(self, *, state: str = "load", timeout_ms: int | None = None) -> None: ...
@@ -142,7 +166,9 @@ class BrowserDriver(Protocol):
     async def evaluate(self, expression: str) -> Any: ...
 
     # downloads / tabs ------------------------------------------------------------
-    async def download(self, target: TargetSpec | None, *, timeout_ms: int | None = None, trigger: Any = None) -> DownloadResult: ...
+    async def download(
+        self, target: TargetSpec | None, *, timeout_ms: int | None = None, trigger: Any = None
+    ) -> DownloadResult: ...
     async def list_tabs(self) -> list[dict[str, Any]]: ...
     async def switch_tab(self, index: int) -> None: ...
     async def close_tab(self, index: int | None = None) -> None: ...
@@ -159,7 +185,7 @@ def normalize_target(target: TargetSpec) -> dict[str, Any]:
         return {"index": int(value[1:])}
     for prefix in ("text=", "role=", "placeholder=", "label=", "testid=", "css=", "xpath="):
         if value.lower().startswith(prefix):
-            key, rest = prefix[:-1], value[len(prefix):]
+            key, rest = prefix[:-1], value[len(prefix) :]
             if key == "role" and ":" in rest:
                 role, name = rest.split(":", 1)
                 return {"role": role.strip(), "name": name.strip()}

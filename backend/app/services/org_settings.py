@@ -53,7 +53,12 @@ def llm_overrides_for(org: Organization | None) -> dict[str, Any] | None:
     encrypted = (org.secrets_encrypted or {}).get("llm_api_key")
     if encrypted:
         api_key = try_decrypt_secret(encrypted)
-    return {"provider": provider, "model": cfg.get("model"), "base_url": cfg.get("base_url"), "api_key": api_key}
+    return {
+        "provider": provider,
+        "model": cfg.get("model"),
+        "base_url": cfg.get("base_url"),
+        "api_key": api_key,
+    }
 
 
 def llm_settings_view(org: Organization) -> dict[str, Any]:
@@ -75,7 +80,9 @@ async def update_org_settings(db: AsyncSession, org: Organization, data: dict[st
         org.name = data["name"]
     settings_blob = dict(org.settings or {})
     if data.get("settings") is not None:
-        allowed = {k: v for k, v in data["settings"].items() if k in ("notifications", "defaults", "ui", "platforms")}
+        allowed = {
+            k: v for k, v in data["settings"].items() if k in ("notifications", "defaults", "ui", "platforms")
+        }
         settings_blob.update(allowed)
     llm_cfg = dict(settings_blob.get("llm") or {})
     if data.get("llm_provider") is not None:

@@ -81,14 +81,21 @@ class FakeVideoSite:
     def tick(self) -> None:
         if self.state == "QUEUED" and time.monotonic() - self.started_at >= self.queue_seconds:
             self.state = "GENERATING"
-        if self.state == "GENERATING" and time.monotonic() - self.started_at >= self.queue_seconds + self.generation_seconds:
+        if (
+            self.state == "GENERATING"
+            and time.monotonic() - self.started_at >= self.queue_seconds + self.generation_seconds
+        ):
             self.state = "FAILED" if self.attempts <= self.fail_first_attempts else "COMPLETED"
 
     def generate(self) -> None:
         if not self.prompt.strip():
             raise ElementNotFound("Generate button is disabled (empty prompt)")
         self.attempts += 1
-        if self.human_check_on_attempt and self.attempts == self.human_check_on_attempt and not self.human_verified:
+        if (
+            self.human_check_on_attempt
+            and self.attempts == self.human_check_on_attempt
+            and not self.human_verified
+        ):
             self.human_check_pending = True
             self.state = "IDLE"
             return
@@ -184,14 +191,35 @@ class FakeDriver:
         if self.site.login_wall:
             return [
                 FakeElement(0, "section", "region", "Login", selector="#loginView"),
-                FakeElement(1, "input", "textbox", "Email", placeholder="Email", input_type="email", selector="#email"),
-                FakeElement(2, "input", "textbox", "Password", placeholder="Password", input_type="password", selector="#password"),
+                FakeElement(
+                    1, "input", "textbox", "Email", placeholder="Email", input_type="email", selector="#email"
+                ),
+                FakeElement(
+                    2,
+                    "input",
+                    "textbox",
+                    "Password",
+                    placeholder="Password",
+                    input_type="password",
+                    selector="#password",
+                ),
                 FakeElement(3, "button", "button", "Sign in", text="Sign in", selector="#loginBtn"),
             ]
         els: list[FakeElement] = [
             FakeElement(0, "main", "main", "App", selector="#appView"),
-            FakeElement(1, "textarea", "textbox", "Prompt", placeholder="Describe the video you want to generate", value=self.site.prompt, selector="#prompt", testid="prompt"),
-            FakeElement(2, "input", "file", "Reference image", input_type="file", selector="input[type=file]"),
+            FakeElement(
+                1,
+                "textarea",
+                "textbox",
+                "Prompt",
+                placeholder="Describe the video you want to generate",
+                value=self.site.prompt,
+                selector="#prompt",
+                testid="prompt",
+            ),
+            FakeElement(
+                2, "input", "file", "Reference image", input_type="file", selector="input[type=file]"
+            ),
             FakeElement(3, "button", "button", "5s", text="5s", selector="#durations [data-duration='5']"),
             FakeElement(4, "button", "button", "8s", text="8s", selector="#durations [data-duration='8']"),
             FakeElement(5, "button", "button", "16:9", text="16:9", selector="#ratios [data-ratio='16:9']"),
@@ -199,13 +227,53 @@ class FakeDriver:
         ]
         if self.site.human_check_pending:
             els.append(FakeElement(7, "div", "region", "Security check", selector="#humanCheck"))
-            els.append(FakeElement(8, "input", "checkbox", "Verify you are human", input_type="checkbox", checked=False, selector="#humanCheckbox"))
-        els.append(FakeElement(9, "button", "button", "Generate", text="Generate", disabled=self.site.state in ("QUEUED", "GENERATING") or self.site.human_check_pending, selector="#generate", testid="generate"))
+            els.append(
+                FakeElement(
+                    8,
+                    "input",
+                    "checkbox",
+                    "Verify you are human",
+                    input_type="checkbox",
+                    checked=False,
+                    selector="#humanCheckbox",
+                )
+            )
+        els.append(
+            FakeElement(
+                9,
+                "button",
+                "button",
+                "Generate",
+                text="Generate",
+                disabled=self.site.state in ("QUEUED", "GENERATING") or self.site.human_check_pending,
+                selector="#generate",
+                testid="generate",
+            )
+        )
         if self.site.state == "COMPLETED":
             els.append(FakeElement(10, "video", "video", "Result video", selector="#result video"))
-            els.append(FakeElement(11, "a", "link", "Download video", text="Download video", href="/mock-platform/api/download/clip.mp4", selector="a#download"))
+            els.append(
+                FakeElement(
+                    11,
+                    "a",
+                    "link",
+                    "Download video",
+                    text="Download video",
+                    href="/mock-platform/api/download/clip.mp4",
+                    selector="a#download",
+                )
+            )
         if self.site.state == "FAILED":
-            els.append(FakeElement(12, "div", "status", "Failed", text="Generation failed: server error, please retry", selector=".status-failed"))
+            els.append(
+                FakeElement(
+                    12,
+                    "div",
+                    "status",
+                    "Failed",
+                    text="Generation failed: server error, please retry",
+                    selector=".status-failed",
+                )
+            )
             els.append(FakeElement(13, "button", "button", "Retry", text="Retry", selector="#retry"))
         return els
 
@@ -215,7 +283,11 @@ class FakeDriver:
             return ""
         if self.site.login_wall:
             return "MockVid Studio\nSign in to continue\nAny email and password work."
-        lines = ["MockVid Studio – AI Video Generator (Demo)", self.site.status_text(), f"Uploads: {len(self.site.uploaded)}"]
+        lines = [
+            "MockVid Studio – AI Video Generator (Demo)",
+            self.site.status_text(),
+            f"Uploads: {len(self.site.uploaded)}",
+        ]
         if self.site.human_check_pending:
             lines.insert(1, "Security check required\nVerify you are human")
         return "\n".join(lines)
@@ -267,7 +339,9 @@ class FakeDriver:
                 if css.endswith(el.selector.lower()) and el.selector:
                     return el
             raise ElementNotFound(f"Element not found: {describe_target(target)}")
-        needle = str(spec.get("name") or spec.get("text") or spec.get("placeholder") or spec.get("label") or "").strip()
+        needle = str(
+            spec.get("name") or spec.get("text") or spec.get("placeholder") or spec.get("label") or ""
+        ).strip()
         if not needle:
             if elements and spec.get("role"):
                 return elements[0]
@@ -352,7 +426,15 @@ class FakeDriver:
         elif el.selector.startswith("#ratios"):
             self.site.selected["ratio"] = el.text
 
-    async def type(self, target: TargetSpec, text: str, *, clear: bool = True, press_enter: bool = False, delay_ms: int = 0) -> None:
+    async def type(
+        self,
+        target: TargetSpec,
+        text: str,
+        *,
+        clear: bool = True,
+        press_enter: bool = False,
+        delay_ms: int = 0,
+    ) -> None:
         self._check_alive()
         el = self._match(target)
         self.actions.append(("type", (el.name, text)))
@@ -365,7 +447,9 @@ class FakeDriver:
     async def select_option(self, target: TargetSpec, value: str) -> None:
         self.actions.append(("select", value))
 
-    async def scroll(self, direction: str = "down", amount: int = 600, target: TargetSpec | None = None) -> None:
+    async def scroll(
+        self, direction: str = "down", amount: int = 600, target: TargetSpec | None = None
+    ) -> None:
         self.actions.append(("scroll", direction))
 
     async def hover(self, target: TargetSpec) -> None:
@@ -383,7 +467,9 @@ class FakeDriver:
         except ElementNotFound:
             return False
 
-    async def wait_for(self, target: TargetSpec, *, state: str = "visible", timeout_ms: int | None = None) -> bool:
+    async def wait_for(
+        self, target: TargetSpec, *, state: str = "visible", timeout_ms: int | None = None
+    ) -> bool:
         deadline = time.monotonic() + (timeout_ms or 2000) / 1000
         while True:
             visible = await self.exists(target)
@@ -426,7 +512,14 @@ class FakeDriver:
         return self._text()[:max_chars]
 
     async def snapshot(self, *, include_screenshot: bool = False) -> PageSnapshot:
-        snap = PageSnapshot(url=self._url, title=await self.title(), text=self._text(), elements=list(self._elements()), tabs=list(self.tabs), file_inputs=1)
+        snap = PageSnapshot(
+            url=self._url,
+            title=await self.title(),
+            text=self._text(),
+            elements=list(self._elements()),
+            tabs=list(self.tabs),
+            file_inputs=1,
+        )
         self.last_snapshot = snap
         return snap
 
@@ -439,7 +532,9 @@ class FakeDriver:
     async def evaluate(self, expression: str) -> Any:
         return None
 
-    async def download(self, target: TargetSpec | None, *, timeout_ms: int | None = None, trigger: Any = None) -> DownloadResult:
+    async def download(
+        self, target: TargetSpec | None, *, timeout_ms: int | None = None, trigger: Any = None
+    ) -> DownloadResult:
         self._check_alive()
         if target is not None:
             el = self._match(target)
@@ -449,7 +544,12 @@ class FakeDriver:
         path = self.downloads_dir / f"clip-{int(time.time() * 1000)}-{self.site.downloads}.mp4"
         shutil.copyfile(SAMPLE_MP4, path)
         self.actions.append(("download", str(path)))
-        return DownloadResult(path=path, suggested_filename="clip.mp4", url=self._url + "download/clip.mp4", size_bytes=path.stat().st_size)
+        return DownloadResult(
+            path=path,
+            suggested_filename="clip.mp4",
+            url=self._url + "download/clip.mp4",
+            size_bytes=path.stat().st_size,
+        )
 
     async def list_tabs(self) -> list[dict[str, Any]]:
         return list(self.tabs)
@@ -492,7 +592,11 @@ class FakeBrowser:
         return self._alive and self.driver.alive
 
     async def storage_state(self) -> dict[str, Any]:
-        cookies = [{"name": "mockvid_session", "value": "fake", "domain": "127.0.0.1", "path": "/"}] if self.driver.site.logged_in else []
+        cookies = (
+            [{"name": "mockvid_session", "value": "fake", "domain": "127.0.0.1", "path": "/"}]
+            if self.driver.site.logged_in
+            else []
+        )
         return {"cookies": cookies, "origins": []}
 
     async def restore_cookies(self, cookies: list[dict[str, Any]]) -> None:
@@ -524,7 +628,16 @@ class FakeStreamer:
         from app.realtime.bus import frames_channel
 
         self.frames += 1
-        payload = {"type": "frame", "session_id": self.session_id, "seq": self.frames, "data": base64.b64encode(_TINY_JPEG).decode(), "width": 1, "height": 1, "format": "jpeg", "ts": time.time()}
+        payload = {
+            "type": "frame",
+            "session_id": self.session_id,
+            "seq": self.frames,
+            "data": base64.b64encode(_TINY_JPEG).decode(),
+            "width": 1,
+            "height": 1,
+            "format": "jpeg",
+            "ts": time.time(),
+        }
         with contextlib.suppress(Exception):
             await self.bus.publish(frames_channel(self.session_id), payload)
 

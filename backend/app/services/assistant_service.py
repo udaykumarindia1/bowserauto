@@ -1,4 +1,4 @@
-"""JARVIS command interpreter.
+"""AVINASH command interpreter (the JARVIS-style HUD assistant).
 
 Turns a natural-language command typed (or dictated) in the HUD console into a concrete
 workspace action, an answer, or a request for confirmation. Resolution order:
@@ -44,9 +44,14 @@ from app.services.org_settings import llm_overrides_for
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_ASSISTANT_NAME = "AVINASH"
+# Former defaults: a stored preference equal to one of these means "never customised".
+LEGACY_DEFAULT_NAMES = frozenset({"JARVIS"})
 ACTIVE = [s.value for s in TaskStatus if s.is_active]
 ATTENTION = (TaskStatus.needs_attention.value, TaskStatus.waiting_for_human.value)
-SECRET_PATTERN = re.compile(r"(password|passwd|api[_ -]?key|secret|token|sk-[a-z0-9]{8,}|bearer\s)", re.IGNORECASE)
+SECRET_PATTERN = re.compile(
+    r"(password|passwd|api[_ -]?key|secret|token|sk-[a-z0-9]{8,}|bearer\s)", re.IGNORECASE
+)
 URL_PATTERN = re.compile(r"((?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?)", re.IGNORECASE)
 HEX_PATTERN = re.compile(r"#?([0-9a-f]{6})\b", re.IGNORECASE)
 
@@ -95,20 +100,69 @@ COLOUR_NAMES = {
 }
 
 TOOL_CATALOGUE: list[dict[str, Any]] = [
-    {"tool": "status", "args": {}, "description": "Report what is running, queued and waiting for the operator."},
-    {"tool": "stop_everything", "args": {}, "description": "Emergency stop: cancel every active task in the organization."},
-    {"tool": "task_control", "args": {"action": "pause|resume|stop|retry|skip|takeover|release|start", "task": "task id, title fragment or 'current'"}, "description": "Control a task."},
-    {"tool": "open_session", "args": {"session": "session name or platform key", "url": "optional url"}, "description": "Open a persistent browser session in the live viewer."},
-    {"tool": "new_session", "args": {"platform": "platform key", "name": "optional"}, "description": "Create a new persistent browser session for a platform."},
-    {"tool": "navigate", "args": {"url": "https://...", "session": "optional session name"}, "description": "Navigate the current or named browser session to a URL."},
-    {"tool": "create_task", "args": {"instructions": "what the browser agent should do", "platform": "optional platform key"}, "description": "Queue a browser-agent task that performs instructions in a browser."},
-    {"tool": "generate_project", "args": {"project": "project name fragment"}, "description": "Start video generation for all scenes of a project."},
-    {"tool": "remember", "args": {"key": "short label", "value": "fact"}, "description": "Store a fact in memory."},
+    {
+        "tool": "status",
+        "args": {},
+        "description": "Report what is running, queued and waiting for the operator.",
+    },
+    {
+        "tool": "stop_everything",
+        "args": {},
+        "description": "Emergency stop: cancel every active task in the organization.",
+    },
+    {
+        "tool": "task_control",
+        "args": {
+            "action": "pause|resume|stop|retry|skip|takeover|release|start",
+            "task": "task id, title fragment or 'current'",
+        },
+        "description": "Control a task.",
+    },
+    {
+        "tool": "open_session",
+        "args": {"session": "session name or platform key", "url": "optional url"},
+        "description": "Open a persistent browser session in the live viewer.",
+    },
+    {
+        "tool": "new_session",
+        "args": {"platform": "platform key", "name": "optional"},
+        "description": "Create a new persistent browser session for a platform.",
+    },
+    {
+        "tool": "navigate",
+        "args": {"url": "https://...", "session": "optional session name"},
+        "description": "Navigate the current or named browser session to a URL.",
+    },
+    {
+        "tool": "create_task",
+        "args": {"instructions": "what the browser agent should do", "platform": "optional platform key"},
+        "description": "Queue a browser-agent task that performs instructions in a browser.",
+    },
+    {
+        "tool": "generate_project",
+        "args": {"project": "project name fragment"},
+        "description": "Start video generation for all scenes of a project.",
+    },
+    {
+        "tool": "remember",
+        "args": {"key": "short label", "value": "fact"},
+        "description": "Store a fact in memory.",
+    },
     {"tool": "recall", "args": {}, "description": "List stored memory facts."},
     {"tool": "forget", "args": {"query": "key or fragment"}, "description": "Delete matching memory facts."},
-    {"tool": "open_page", "args": {"page": "dashboard|new task|projects|sessions|tasks|files|platforms|templates|activity|settings"}, "description": "Navigate the workspace UI."},
+    {
+        "tool": "open_page",
+        "args": {
+            "page": "dashboard|new task|projects|sessions|tasks|files|platforms|templates|activity|settings"
+        },
+        "description": "Navigate the workspace UI.",
+    },
     {"tool": "set_theme", "args": {"color": "#hex or colour name"}, "description": "Recolour the HUD."},
-    {"tool": "set_name", "args": {"assistant_name": "optional", "user_name": "optional"}, "description": "Rename the assistant or how it addresses the operator."},
+    {
+        "tool": "set_name",
+        "args": {"assistant_name": "optional", "user_name": "optional"},
+        "description": "Rename the assistant or how it addresses the operator.",
+    },
     {"tool": "answer", "args": {"text": "reply"}, "description": "Answer directly when no action is needed."},
 ]
 
@@ -155,14 +209,17 @@ def honorific(auth: AuthContext) -> str:
 
 def assistant_name(auth: AuthContext) -> str:
     prefs = (auth.user.preferences or {}).get("jarvis") or {}
-    return (prefs.get("assistant_name") or "JARVIS").strip() or "JARVIS"
+    name = (prefs.get("assistant_name") or "").strip()
+    return DEFAULT_ASSISTANT_NAME if not name or name in LEGACY_DEFAULT_NAMES else name
 
 
 def _short(task: Task) -> str:
     return task.title or f"task {str(task.id)[:8]}"
 
 
-async def _find_task(db: AsyncSession, org_id: uuid.UUID, ref: str | None, ctx: CommandContext, *, prefer_active: bool = True) -> Task | None:
+async def _find_task(
+    db: AsyncSession, org_id: uuid.UUID, ref: str | None, ctx: CommandContext, *, prefer_active: bool = True
+) -> Task | None:
     ref = (ref or "").strip().strip("\"'")
     if ref.lower() in ("", "current", "this", "it", "the current task", "this task") and ctx.task_id:
         task = await db.get(Task, ctx.task_id)
@@ -174,7 +231,18 @@ async def _find_task(db: AsyncSession, org_id: uuid.UUID, ref: str | None, ctx: 
                 return task
         except ValueError:
             pass
-        rows = (await db.execute(select(Task).where(Task.organization_id == org_id).order_by(Task.created_at.desc()).limit(200))).scalars().all()
+        rows = (
+            (
+                await db.execute(
+                    select(Task)
+                    .where(Task.organization_id == org_id)
+                    .order_by(Task.created_at.desc())
+                    .limit(200)
+                )
+            )
+            .scalars()
+            .all()
+        )
         lowered = ref.lower()
         by_prefix = [t for t in rows if str(t.id).startswith(lowered)]
         if by_prefix:
@@ -190,14 +258,35 @@ async def _find_task(db: AsyncSession, org_id: uuid.UUID, ref: str | None, ctx: 
         if task and task.organization_id == org_id:
             return task
     if prefer_active:
-        rows = (await db.execute(select(Task).where(Task.organization_id == org_id, Task.status.in_(ACTIVE)).order_by(Task.updated_at.desc()).limit(1))).scalars().all()
+        rows = (
+            (
+                await db.execute(
+                    select(Task)
+                    .where(Task.organization_id == org_id, Task.status.in_(ACTIVE))
+                    .order_by(Task.updated_at.desc())
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .all()
+        )
         if rows:
             return rows[0]
-    rows = (await db.execute(select(Task).where(Task.organization_id == org_id).order_by(Task.created_at.desc()).limit(1))).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Task).where(Task.organization_id == org_id).order_by(Task.created_at.desc()).limit(1)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return rows[0] if rows else None
 
 
-async def _find_session(db: AsyncSession, org_id: uuid.UUID, ref: str | None, ctx: CommandContext) -> BrowserSession | None:
+async def _find_session(
+    db: AsyncSession, org_id: uuid.UUID, ref: str | None, ctx: CommandContext
+) -> BrowserSession | None:
     ref = (ref or "").strip().strip("\"'").lower()
     sessions = await session_service.list_sessions(db, org_id)
     if ref in ("", "current", "this", "the browser", "browser") and ctx.session_id:
@@ -248,24 +337,88 @@ def _confirm(title: str, detail: str, command: str) -> dict[str, Any]:
 
 # ----------------------------------------------------------------------------- status / briefing
 async def status_snapshot(db: AsyncSession, org_id: uuid.UUID) -> dict[str, Any]:
-    counts = dict((await db.execute(select(Task.status, func.count(Task.id)).where(Task.organization_id == org_id).group_by(Task.status))).all())
-    attention = (await db.execute(select(Task).where(Task.organization_id == org_id, Task.status.in_(ATTENTION)).order_by(Task.updated_at.desc()).limit(5))).scalars().all()
-    running = (await db.execute(select(Task).where(Task.organization_id == org_id, Task.status == TaskStatus.running.value).order_by(Task.updated_at.desc()).limit(5))).scalars().all()
+    counts = dict(
+        (
+            await db.execute(
+                select(Task.status, func.count(Task.id))
+                .where(Task.organization_id == org_id)
+                .group_by(Task.status)
+            )
+        ).all()
+    )
+    attention = (
+        (
+            await db.execute(
+                select(Task)
+                .where(Task.organization_id == org_id, Task.status.in_(ATTENTION))
+                .order_by(Task.updated_at.desc())
+                .limit(5)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    running = (
+        (
+            await db.execute(
+                select(Task)
+                .where(Task.organization_id == org_id, Task.status == TaskStatus.running.value)
+                .order_by(Task.updated_at.desc())
+                .limit(5)
+            )
+        )
+        .scalars()
+        .all()
+    )
     sessions = await session_service.list_sessions(db, org_id)
     since = datetime.now(UTC) - timedelta(hours=24)
-    files_24h = (await db.execute(select(func.count(GeneratedFile.id)).where(GeneratedFile.organization_id == org_id, GeneratedFile.created_at >= since))).scalar_one()
-    failed_24h = (await db.execute(select(func.count(Task.id)).where(Task.organization_id == org_id, Task.status == TaskStatus.failed.value, Task.updated_at >= since))).scalar_one()
+    files_24h = (
+        await db.execute(
+            select(func.count(GeneratedFile.id)).where(
+                GeneratedFile.organization_id == org_id, GeneratedFile.created_at >= since
+            )
+        )
+    ).scalar_one()
+    failed_24h = (
+        await db.execute(
+            select(func.count(Task.id)).where(
+                Task.organization_id == org_id,
+                Task.status == TaskStatus.failed.value,
+                Task.updated_at >= since,
+            )
+        )
+    ).scalar_one()
     return {
-        "running": [{"id": str(t.id), "title": _short(t), "action": t.current_action, "percent": (t.progress or {}).get("percent", 0)} for t in running],
+        "running": [
+            {
+                "id": str(t.id),
+                "title": _short(t),
+                "action": t.current_action,
+                "percent": (t.progress or {}).get("percent", 0),
+            }
+            for t in running
+        ],
         "queued": counts.get(TaskStatus.queued.value, 0),
         "paused": counts.get(TaskStatus.paused.value, 0),
-        "attention": [{"id": str(t.id), "title": _short(t), "reason": (t.attention or {}).get("reason", ""), "kind": (t.attention or {}).get("kind", "")} for t in attention],
+        "attention": [
+            {
+                "id": str(t.id),
+                "title": _short(t),
+                "reason": (t.attention or {}).get("reason", ""),
+                "kind": (t.attention or {}).get("kind", ""),
+            }
+            for t in attention
+        ],
         "completed": counts.get(TaskStatus.completed.value, 0),
         "failed": counts.get(TaskStatus.failed.value, 0),
         "sessions": {
             "total": len(sessions),
             "live": sum(1 for s in sessions if s.status in ("ready", "in_use")),
-            "logged_out": [s.name for s in sessions if s.login_status in ("logged_out", "unknown") and s.status != "closed"][:5],
+            "logged_out": [
+                s.name
+                for s in sessions
+                if s.login_status in ("logged_out", "unknown") and s.status != "closed"
+            ][:5],
             "expired": [s.name for s in sessions if s.status == "expired"][:5],
         },
         "files_24h": int(files_24h),
@@ -298,7 +451,9 @@ def status_sentence(snap: dict[str, Any], who: str) -> str:
     if sess["expired"]:
         parts.append(f"Session {sess['expired'][0]} has expired and needs reconnecting.")
     elif sess["logged_out"]:
-        parts.append(f"{_plural(len(sess['logged_out']), 'session')} not logged in: {', '.join(sess['logged_out'][:3])}.")
+        parts.append(
+            f"{_plural(len(sess['logged_out']), 'session')} not logged in: {', '.join(sess['logged_out'][:3])}."
+        )
     return " ".join(parts)
 
 
@@ -309,34 +464,75 @@ async def briefing(db: AsyncSession, auth: AuthContext, local_hour: int | None) 
     greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 18 else "Good evening"
     lines = [f"{greeting}, {who}. {assistant_name(auth)} online."]
     if snap["files_24h"] or snap["failed_24h"]:
-        lines.append(f"Last 24 hours: {_plural(snap['files_24h'], 'file')} generated, {_plural(snap['failed_24h'], 'task')} failed.")
+        lines.append(
+            f"Last 24 hours: {_plural(snap['files_24h'], 'file')} generated, {_plural(snap['failed_24h'], 'task')} failed."
+        )
     lines.append(status_sentence(snap, who))
     return {"text": " ".join(lines), "status": snap, "assistant_name": assistant_name(auth), "user_name": who}
 
 
 # ----------------------------------------------------------------------------- memory
 async def list_memory(db: AsyncSession, org_id: uuid.UUID) -> list[MemoryFact]:
-    return list((await db.execute(select(MemoryFact).where(MemoryFact.organization_id == org_id).order_by(MemoryFact.created_at.desc()))).scalars().all())
+    return list(
+        (
+            await db.execute(
+                select(MemoryFact)
+                .where(MemoryFact.organization_id == org_id)
+                .order_by(MemoryFact.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
 
 
-async def remember(db: AsyncSession, auth: AuthContext, *, key: str, value: str, category: str = "notes", source: str = "user") -> MemoryFact:
+async def remember(
+    db: AsyncSession,
+    auth: AuthContext,
+    *,
+    key: str,
+    value: str,
+    category: str = "notes",
+    source: str = "user",
+) -> MemoryFact:
     value = value.strip()
     key = (key or "").strip()[:120] or value[:60]
     if not value:
         raise ValidationFailed("Nothing to remember")
     if SECRET_PATTERN.search(value) or SECRET_PATTERN.search(key):
-        raise ValidationFailed("Memory refuses to store credentials or tokens; log in through the browser session instead")
-    existing = (await db.execute(select(MemoryFact).where(MemoryFact.organization_id == auth.org_id, func.lower(MemoryFact.key) == key.lower()))).scalars().first()
+        raise ValidationFailed(
+            "Memory refuses to store credentials or tokens; log in through the browser session instead"
+        )
+    existing = (
+        (
+            await db.execute(
+                select(MemoryFact).where(
+                    MemoryFact.organization_id == auth.org_id, func.lower(MemoryFact.key) == key.lower()
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
     if existing:
         existing.value = value[:4000]
         existing.category = category
         existing.source = source
         await db.flush()
         return existing
-    count = (await db.execute(select(func.count(MemoryFact.id)).where(MemoryFact.organization_id == auth.org_id))).scalar_one()
+    count = (
+        await db.execute(select(func.count(MemoryFact.id)).where(MemoryFact.organization_id == auth.org_id))
+    ).scalar_one()
     if count >= 500:
         raise ValidationFailed("Memory is full (500 facts); forget something first")
-    fact = MemoryFact(organization_id=auth.org_id, user_id=auth.user_id, key=key, value=value[:4000], category=category[:40] or "notes", source=source)
+    fact = MemoryFact(
+        organization_id=auth.org_id,
+        user_id=auth.user_id,
+        key=key,
+        value=value[:4000],
+        category=category[:40] or "notes",
+        source=source,
+    )
     db.add(fact)
     await db.flush()
     return fact
@@ -356,29 +552,123 @@ async def forget(db: AsyncSession, org_id: uuid.UUID, query: str) -> int:
 
 
 async def memory_prompt_lines(db: AsyncSession, org_id: uuid.UUID, limit: int = 30) -> list[str]:
-    facts = (await db.execute(select(MemoryFact).where(MemoryFact.organization_id == org_id).order_by(MemoryFact.updated_at.desc()).limit(limit))).scalars().all()
+    facts = (
+        (
+            await db.execute(
+                select(MemoryFact)
+                .where(MemoryFact.organization_id == org_id)
+                .order_by(MemoryFact.updated_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [f"{f.key}: {f.value}" for f in facts]
 
 
 # ----------------------------------------------------------------------------- grammar
 _RULES: list[tuple[str, re.Pattern[str]]] = [
     ("help", re.compile(r"^\s*(help|what can you do|capabilities|commands)\b", re.I)),
-    ("status", re.compile(r"\b(status|sitrep|report|what(?:'s| is) (?:running|happening|going on)|how are (?:things|we doing)|briefing|update me)\b", re.I)),
-    ("stop_everything", re.compile(r"\b(stop everything|stop all|emergency stop|halt all|kill everything|abort all|shut (?:it )?all down)\b", re.I)),
-    ("recall", re.compile(r"\b(what do you remember|show (?:your |my )?memory|list (?:your |my )?memor(?:y|ies)|what have you (?:stored|remembered))\b", re.I)),
+    (
+        "status",
+        re.compile(
+            r"\b(status|sitrep|report|what(?:'s| is) (?:running|happening|going on)|how are (?:things|we doing)|briefing|update me)\b",
+            re.I,
+        ),
+    ),
+    (
+        "stop_everything",
+        re.compile(
+            r"\b(stop everything|stop all|emergency stop|halt all|kill everything|abort all|shut (?:it )?all down)\b",
+            re.I,
+        ),
+    ),
+    (
+        "recall",
+        re.compile(
+            r"\b(what do you remember|show (?:your |my )?memory|list (?:your |my )?memor(?:y|ies)|what have you (?:stored|remembered))\b",
+            re.I,
+        ),
+    ),
     ("forget", re.compile(r"^\s*forget\s+(?:about\s+|that\s+)?(?P<query>.+)$", re.I)),
-    ("remember", re.compile(r"^\s*(?:please\s+)?(?:remember|note|keep in mind|memori[sz]e)\s+(?:that\s+)?(?P<value>.+)$", re.I)),
-    ("set_theme", re.compile(r"\b(?:(?:change|set|switch|make)\s+(?:the\s+)?(?:ui\s+|hud\s+|theme\s+)?colou?r|theme|recolou?r)\b.*?(?:to\s+)?(?P<color>#?[0-9a-f]{6}\b|" + "|".join(COLOUR_NAMES) + r")\b", re.I)),
-    ("set_name", re.compile(r"\b(?:call me|my name is|address me as)\s+(?P<user_name>[A-Za-z][\w .'-]{0,40})$", re.I)),
-    ("set_assistant", re.compile(r"\b(?:your name is|call yourself|rename yourself(?: to)?|i(?:'ll| will) call you)\s+(?P<assistant_name>[A-Za-z][\w .'-]{0,30})$", re.I)),
-    ("create_task", re.compile(r"^\s*(?:run|do|execute|task|agent|browser)\s*[:\-]\s*(?P<instructions>.+)$", re.I)),
-    ("task_control", re.compile(r"^\s*(?P<action>pause|resume|continue|unpause|stop|cancel|abort|retry|skip|take ?over|takeover|release|return control|hand back|start|run)\b\s*(?:the\s+)?(?:(?:current|this|running|latest|last)\s+)?(?:task\s*)?(?:[\"']?(?P<task>[^\"']{1,80})[\"']?)?\s*$", re.I)),
-    ("generate_project", re.compile(r"\b(?:generate|render|produce)\s+(?:the\s+)?(?:video(?:s)?|scenes?|clips?)\s*(?:for|of|in)?\s*(?:project\s+)?(?P<project>.+)?$", re.I)),
-    ("new_session", re.compile(r"\b(?:create|new|add)\s+(?:a\s+)?(?:browser\s+)?session\s*(?:for|on)?\s*(?P<platform>.+)?$", re.I)),
-    ("navigate", re.compile(r"^\s*(?:navigate|go|browse|take (?:me|the browser))\s+to\s+(?P<url>\S+)(?:\s+in\s+(?P<session>.+))?\s*$", re.I)),
-    ("open_page", re.compile(r"^\s*(?:open|show|go to|display|take me to)\s+(?:the\s+)?(?:my\s+)?(?P<page>" + "|".join(sorted(PAGES, key=len, reverse=True)) + r")(?:\s+page|\s+tab)?\s*$", re.I)),
-    ("open_session", re.compile(r"^\s*(?:open|launch|bring up|show)\s+(?:the\s+)?(?:browser\s+)?(?:session\s+)?(?P<session>.+?)(?:\s+session|\s+browser)?\s*$", re.I)),
-    ("create_task", re.compile(r"^\s*(?:run|do|execute|task|agent|please)\s*[:,-]?\s+(?P<instructions>.+)$", re.I)),
+    (
+        "remember",
+        re.compile(
+            r"^\s*(?:please\s+)?(?:remember|note|keep in mind|memori[sz]e)\s+(?:that\s+)?(?P<value>.+)$", re.I
+        ),
+    ),
+    (
+        "set_theme",
+        re.compile(
+            r"\b(?:(?:change|set|switch|make)\s+(?:the\s+)?(?:ui\s+|hud\s+|theme\s+)?colou?r|theme|recolou?r)\b.*?(?:to\s+)?(?P<color>#?[0-9a-f]{6}\b|"
+            + "|".join(COLOUR_NAMES)
+            + r")\b",
+            re.I,
+        ),
+    ),
+    (
+        "set_name",
+        re.compile(r"\b(?:call me|my name is|address me as)\s+(?P<user_name>[A-Za-z][\w .'-]{0,40})$", re.I),
+    ),
+    (
+        "set_assistant",
+        re.compile(
+            r"\b(?:your name is|call yourself|rename yourself(?: to)?|i(?:'ll| will) call you)\s+(?P<assistant_name>[A-Za-z][\w .'-]{0,30})$",
+            re.I,
+        ),
+    ),
+    (
+        "create_task",
+        re.compile(r"^\s*(?:run|do|execute|task|agent|browser)\s*[:\-]\s*(?P<instructions>.+)$", re.I),
+    ),
+    (
+        "task_control",
+        re.compile(
+            r"^\s*(?P<action>pause|resume|continue|unpause|stop|cancel|abort|retry|skip|take ?over|takeover|release|return control|hand back|start|run)\b\s*(?:the\s+)?(?:(?:current|this|running|latest|last)\s+)?(?:task\s*)?(?:[\"']?(?P<task>[^\"']{1,80})[\"']?)?\s*$",
+            re.I,
+        ),
+    ),
+    (
+        "generate_project",
+        re.compile(
+            r"\b(?:generate|render|produce)\s+(?:the\s+)?(?:video(?:s)?|scenes?|clips?)\s*(?:for|of|in)?\s*(?:project\s+)?(?P<project>.+)?$",
+            re.I,
+        ),
+    ),
+    (
+        "new_session",
+        re.compile(
+            r"\b(?:create|new|add)\s+(?:a\s+)?(?:browser\s+)?session\s*(?:for|on)?\s*(?P<platform>.+)?$", re.I
+        ),
+    ),
+    (
+        "navigate",
+        re.compile(
+            r"^\s*(?:navigate|go|browse|take (?:me|the browser))\s+to\s+(?P<url>\S+)(?:\s+in\s+(?P<session>.+))?\s*$",
+            re.I,
+        ),
+    ),
+    (
+        "open_page",
+        re.compile(
+            r"^\s*(?:open|show|go to|display|take me to)\s+(?:the\s+)?(?:my\s+)?(?P<page>"
+            + "|".join(sorted(PAGES, key=len, reverse=True))
+            + r")(?:\s+page|\s+tab)?\s*$",
+            re.I,
+        ),
+    ),
+    (
+        "open_session",
+        re.compile(
+            r"^\s*(?:open|launch|bring up|show)\s+(?:the\s+)?(?:browser\s+)?(?:session\s+)?(?P<session>.+?)(?:\s+session|\s+browser)?\s*$",
+            re.I,
+        ),
+    ),
+    (
+        "create_task",
+        re.compile(r"^\s*(?:run|do|execute|task|agent|please)\s*[:,-]?\s+(?P<instructions>.+)$", re.I),
+    ),
 ]
 
 _HELP = (
@@ -421,7 +711,9 @@ class Assistant:
         try:
             return await self._dispatch(intent, args, text, ctx, confirmed)
         except AppError as exc:
-            return CommandResult(f"Could not do that, {self.who}: {exc.message}", intent, ok=False, data={"code": exc.code})
+            return CommandResult(
+                f"Could not do that, {self.who}: {exc.message}", intent, ok=False, data={"code": exc.code}
+            )
 
     # -- routing -------------------------------------------------------------------------
     async def _route_with_llm(self, text: str, ctx: CommandContext) -> tuple[str, dict[str, str]] | None:
@@ -437,7 +729,12 @@ class Assistant:
         )
         user = f"TOOLS:\n{catalogue}\n\nCONTEXT: page={ctx.page or '-'} task={ctx.task_id or '-'} session={ctx.session_id or '-'} project={ctx.project_id or '-'}\n\nREQUEST: {text}"
         try:
-            response = await client.complete([LLMMessage("system", system), LLMMessage("user", user)], json_mode=True, max_tokens=300, temperature=0.1)
+            response = await client.complete(
+                [LLMMessage("system", system), LLMMessage("user", user)],
+                json_mode=True,
+                max_tokens=300,
+                temperature=0.1,
+            )
             payload = response.json()
         except (LLMUnavailable, Exception) as exc:  # noqa: BLE001 - any provider failure degrades to the fallback
             logger.warning("assistant LLM routing failed: %s", exc)
@@ -454,7 +751,9 @@ class Assistant:
         return tool, args
 
     # -- dispatch ------------------------------------------------------------------------
-    async def _dispatch(self, intent: str, args: dict[str, str], text: str, ctx: CommandContext, confirmed: bool) -> CommandResult:
+    async def _dispatch(
+        self, intent: str, args: dict[str, str], text: str, ctx: CommandContext, confirmed: bool
+    ) -> CommandResult:
         handler = getattr(self, f"_do_{intent}", None)
         if handler is None:
             return await self._do_unknown(args, text, ctx, confirmed)
@@ -475,26 +774,52 @@ class Assistant:
 
     async def _do_stop_everything(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
-        active = (await self.db.execute(select(func.count(Task.id)).where(Task.organization_id == self.auth.org_id, Task.status.in_(ACTIVE)))).scalar_one()
+        active = (
+            await self.db.execute(
+                select(func.count(Task.id)).where(
+                    Task.organization_id == self.auth.org_id, Task.status.in_(ACTIVE)
+                )
+            )
+        ).scalar_one()
         if not active:
             return CommandResult(f"Nothing to stop, {self.who}. No active tasks.", "stop_everything")
         if not confirmed:
             return CommandResult(
                 f"This cancels {_plural(int(active), 'active task')}. Confirm, {self.who}?",
                 "stop_everything",
-                confirm=_confirm("STOP EVERYTHING", f"Cancel {_plural(int(active), 'active task')} and release every browser.", text),
+                confirm=_confirm(
+                    "STOP EVERYTHING",
+                    f"Cancel {_plural(int(active), 'active task')} and release every browser.",
+                    text,
+                ),
             )
         count = await task_service.stop_everything(self.db, self.auth.org_id)
-        return CommandResult(f"Done. {_plural(count, 'task')} stopped, browsers released.", "stop_everything", actions=[{"type": "task.stop_all", "count": count}], navigate="/tasks")
+        return CommandResult(
+            f"Done. {_plural(count, 'task')} stopped, browsers released.",
+            "stop_everything",
+            actions=[{"type": "task.stop_all", "count": count}],
+            navigate="/tasks",
+        )
 
     async def _do_task_control(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
         verb = args.get("action", "").lower().replace(" ", "")
         action = {
-            "pause": "pause", "resume": "resume", "continue": "resume", "unpause": "resume",
-            "stop": "stop", "cancel": "stop", "abort": "stop", "retry": "retry", "skip": "skip",
-            "takeover": "takeover", "release": "release", "returncontrol": "release", "handback": "release",
-            "start": "start", "run": "start",
+            "pause": "pause",
+            "resume": "resume",
+            "continue": "resume",
+            "unpause": "resume",
+            "stop": "stop",
+            "cancel": "stop",
+            "abort": "stop",
+            "retry": "retry",
+            "skip": "skip",
+            "takeover": "takeover",
+            "release": "release",
+            "returncontrol": "release",
+            "handback": "release",
+            "start": "start",
+            "run": "start",
         }.get(verb)
         if action is None:
             return await self._do_unknown(args, text, ctx, confirmed)
@@ -504,22 +829,52 @@ class Assistant:
             return await self._do_create_task({"instructions": ref}, text, ctx, confirmed)
         task = await _find_task(self.db, self.auth.org_id, ref, ctx, prefer_active=action != "start")
         if task is None:
-            return CommandResult(f"I cannot find a task matching '{ref or 'current'}', {self.who}.", "task_control", ok=False)
+            return CommandResult(
+                f"I cannot find a task matching '{ref or 'current'}', {self.who}.", "task_control", ok=False
+            )
         if action == "stop" and not confirmed:
-            return CommandResult(f"Stop {_short(task)}? It is {task.status.replace('_', ' ')}.", "task_control", confirm=_confirm("STOP TASK", f"Cancel '{_short(task)}'. Completed scenes are kept.", text), data={"task_id": str(task.id)})
+            return CommandResult(
+                f"Stop {_short(task)}? It is {task.status.replace('_', ' ')}.",
+                "task_control",
+                confirm=_confirm("STOP TASK", f"Cancel '{_short(task)}'. Completed scenes are kept.", text),
+                data={"task_id": str(task.id)},
+            )
         fn = {
-            "pause": task_service.pause_task, "resume": task_service.resume_task, "stop": task_service.stop_task,
-            "retry": task_service.retry_task, "skip": task_service.skip_scene, "takeover": task_service.takeover_task,
-            "release": task_service.release_task, "start": task_service.start_task,
+            "pause": task_service.pause_task,
+            "resume": task_service.resume_task,
+            "stop": task_service.stop_task,
+            "retry": task_service.retry_task,
+            "skip": task_service.skip_scene,
+            "takeover": task_service.takeover_task,
+            "release": task_service.release_task,
+            "start": task_service.start_task,
         }[action]
         await fn(self.db, task)
-        verbs = {"pause": "Pausing", "resume": "Resuming", "stop": "Stopping", "retry": "Retrying", "skip": "Skipping the current scene of", "takeover": "Browser control is yours for", "release": "Control returned to the agent for", "start": "Starting"}
-        return CommandResult(f"{verbs[action]} {_short(task)}.", f"task.{action}", actions=[{"type": f"task.{action}", "task_id": str(task.id)}], navigate=f"/tasks/{task.id}", data={"task_id": str(task.id)})
+        verbs = {
+            "pause": "Pausing",
+            "resume": "Resuming",
+            "stop": "Stopping",
+            "retry": "Retrying",
+            "skip": "Skipping the current scene of",
+            "takeover": "Browser control is yours for",
+            "release": "Control returned to the agent for",
+            "start": "Starting",
+        }
+        return CommandResult(
+            f"{verbs[action]} {_short(task)}.",
+            f"task.{action}",
+            actions=[{"type": f"task.{action}", "task_id": str(task.id)}],
+            navigate=f"/tasks/{task.id}",
+            data={"task_id": str(task.id)},
+        )
 
     async def _looks_like_task_ref(self, ref: str, ctx: CommandContext) -> bool:
         if len(ref.split()) > 4:
             return False
-        return await _find_task(self.db, self.auth.org_id, ref, ctx) is not None and ref.lower() not in ("", "task")
+        return await _find_task(self.db, self.auth.org_id, ref, ctx) is not None and ref.lower() not in (
+            "",
+            "task",
+        )
 
     async def _do_open_session(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
@@ -529,22 +884,47 @@ class Assistant:
             platform = _platform_key_for(ref)
             if platform:
                 return await self._do_new_session({"platform": platform}, text, ctx, confirmed)
-            return CommandResult(f"No browser session called '{ref}', {self.who}. Say 'new session for <platform>' to create one.", "open_session", ok=False, navigate="/sessions")
+            return CommandResult(
+                f"No browser session called '{ref}', {self.who}. Say 'new session for <platform>' to create one.",
+                "open_session",
+                ok=False,
+                navigate="/sessions",
+            )
         url = args.get("url") or None
-        await session_service.request_open(self.db, session, interactive=True, url=_normalise_url(url) if url else None)
-        return CommandResult(f"Opening {session.name}. Log in there yourself if it asks — I never handle credentials.", "open_session", actions=[{"type": "session.open", "session_id": str(session.id)}], navigate=f"/sessions/{session.id}", data={"session_id": str(session.id)})
+        await session_service.request_open(
+            self.db, session, interactive=True, url=_normalise_url(url) if url else None
+        )
+        return CommandResult(
+            f"Opening {session.name}. Log in there yourself if it asks — I never handle credentials.",
+            "open_session",
+            actions=[{"type": "session.open", "session_id": str(session.id)}],
+            navigate=f"/sessions/{session.id}",
+            data={"session_id": str(session.id)},
+        )
 
     async def _do_new_session(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
         raw = args.get("platform", "") or ""
         key = _platform_key_for(raw) or (raw.strip().lower().replace(" ", "_") if raw else "generic")
         if get_adapter_class(key) is None:
-            return CommandResult(f"I do not have a platform adapter for '{raw}', {self.who}. Installed: {', '.join(p['key'] for p in list_platform_info())}.", "new_session", ok=False)
+            return CommandResult(
+                f"I do not have a platform adapter for '{raw}', {self.who}. Installed: {', '.join(p['key'] for p in list_platform_info())}.",
+                "new_session",
+                ok=False,
+            )
         info = next((p for p in list_platform_info() if p["key"] == key), {"name": key})
         name = args.get("name") or f"{info['name']} session"
-        session = await session_service.create_session(self.db, self.auth, {"name": name, "platform_key": key, "start_url": ""})
+        session = await session_service.create_session(
+            self.db, self.auth, {"name": name, "platform_key": key, "start_url": ""}
+        )
         await session_service.request_open(self.db, session, interactive=True)
-        return CommandResult(f"Created {name} and opening it now. Sign in manually when the page loads.", "new_session", actions=[{"type": "session.create", "session_id": str(session.id)}], navigate=f"/sessions/{session.id}", data={"session_id": str(session.id)})
+        return CommandResult(
+            f"Created {name} and opening it now. Sign in manually when the page loads.",
+            "new_session",
+            actions=[{"type": "session.create", "session_id": str(session.id)}],
+            navigate=f"/sessions/{session.id}",
+            data={"session_id": str(session.id)},
+        )
 
     async def _do_navigate(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
@@ -553,13 +933,24 @@ class Assistant:
             return CommandResult(f"That does not look like a URL, {self.who}.", "navigate", ok=False)
         session = await _find_session(self.db, self.auth.org_id, args.get("session"), ctx)
         if session is None:
-            return CommandResult("There is no browser session to navigate. Create one first.", "navigate", ok=False, navigate="/sessions")
+            return CommandResult(
+                "There is no browser session to navigate. Create one first.",
+                "navigate",
+                ok=False,
+                navigate="/sessions",
+            )
         target = _normalise_url(url)
         if session.status in ("ready", "in_use"):
             await session_service.navigate(self.db, session, target)
         else:
             await session_service.request_open(self.db, session, interactive=True, url=target)
-        return CommandResult(f"Taking {session.name} to {target}.", "navigate", actions=[{"type": "session.navigate", "session_id": str(session.id), "url": target}], navigate=f"/sessions/{session.id}", data={"session_id": str(session.id)})
+        return CommandResult(
+            f"Taking {session.name} to {target}.",
+            "navigate",
+            actions=[{"type": "session.navigate", "session_id": str(session.id), "url": target}],
+            navigate=f"/sessions/{session.id}",
+            data={"session_id": str(session.id)},
+        )
 
     async def _do_create_task(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
@@ -587,12 +978,28 @@ class Assistant:
             "start": True,
         }
         task = await task_service.create_task(self.db, self.auth, data)
-        return CommandResult(f"Task queued: {_short(task)}. I will report when it needs you.", "create_task", actions=[{"type": "task.create", "task_id": str(task.id)}], navigate=f"/tasks/{task.id}", data={"task_id": str(task.id)})
+        return CommandResult(
+            f"Task queued: {_short(task)}. I will report when it needs you.",
+            "create_task",
+            actions=[{"type": "task.create", "task_id": str(task.id)}],
+            navigate=f"/tasks/{task.id}",
+            data={"task_id": str(task.id)},
+        )
 
     async def _do_generate_project(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
         ref = (args.get("project") or "").strip().strip("\"'").lower()
-        projects = (await self.db.execute(select(Project).where(Project.organization_id == self.auth.org_id, Project.status == "active").order_by(Project.updated_at.desc()))).scalars().all()
+        projects = (
+            (
+                await self.db.execute(
+                    select(Project)
+                    .where(Project.organization_id == self.auth.org_id, Project.status == "active")
+                    .order_by(Project.updated_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
         project = None
         if ref in ("", "this", "current", "this project") and ctx.project_id:
             project = next((p for p in projects if p.id == ctx.project_id), None)
@@ -601,11 +1008,43 @@ class Assistant:
         elif ctx.project_id:
             project = next((p for p in projects if p.id == ctx.project_id), None)
         if project is None:
-            return CommandResult(f"Which project, {self.who}? I did not find one matching '{ref}'.", "generate_project", ok=False, navigate="/projects")
+            return CommandResult(
+                f"Which project, {self.who}? I did not find one matching '{ref}'.",
+                "generate_project",
+                ok=False,
+                navigate="/projects",
+            )
         if not confirmed:
-            return CommandResult(f"Start video generation for {project.name}? This uses the platform's generation credits.", "generate_project", confirm=_confirm("START GENERATION", f"Generate every scene of '{project.name}' on {project.platform_key}.", text), data={"project_id": str(project.id)})
-        task = await task_service.create_task(self.db, self.auth, {"title": f"Generate {project.name}", "kind": "video_generation", "project_id": project.id, "instructions": "", "priority": 5, "config": {}, "start": True})
-        return CommandResult(f"Generation queued for {project.name}: {_short(task)}.", "generate_project", actions=[{"type": "task.create", "task_id": str(task.id)}], navigate=f"/tasks/{task.id}", data={"task_id": str(task.id)})
+            return CommandResult(
+                f"Start video generation for {project.name}? This uses the platform's generation credits.",
+                "generate_project",
+                confirm=_confirm(
+                    "START GENERATION",
+                    f"Generate every scene of '{project.name}' on {project.platform_key}.",
+                    text,
+                ),
+                data={"project_id": str(project.id)},
+            )
+        task = await task_service.create_task(
+            self.db,
+            self.auth,
+            {
+                "title": f"Generate {project.name}",
+                "kind": "video_generation",
+                "project_id": project.id,
+                "instructions": "",
+                "priority": 5,
+                "config": {},
+                "start": True,
+            },
+        )
+        return CommandResult(
+            f"Generation queued for {project.name}: {_short(task)}.",
+            "generate_project",
+            actions=[{"type": "task.create", "task_id": str(task.id)}],
+            navigate=f"/tasks/{task.id}",
+            data={"task_id": str(task.id)},
+        )
 
     async def _do_remember(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
@@ -616,25 +1055,47 @@ class Assistant:
             if m:
                 key, value = m.group(1).strip(), m.group(2).strip()
         fact = await remember(self.db, self.auth, key=key, value=value)
-        return CommandResult(f"Noted: {fact.key} — {fact.value}.", "remember", actions=[{"type": "memory.add", "id": str(fact.id)}], data={"fact": {"id": str(fact.id), "key": fact.key, "value": fact.value}})
+        return CommandResult(
+            f"Noted: {fact.key} — {fact.value}.",
+            "remember",
+            actions=[{"type": "memory.add", "id": str(fact.id)}],
+            data={"fact": {"id": str(fact.id), "key": fact.key, "value": fact.value}},
+        )
 
     async def _do_recall(self, args, text, ctx, confirmed) -> CommandResult:
         facts = await list_memory(self.db, self.auth.org_id)
         if not facts:
-            return CommandResult(f"Nothing stored yet, {self.who}. Say 'remember …' and I will keep it.", "recall", data={"facts": []})
+            return CommandResult(
+                f"Nothing stored yet, {self.who}. Say 'remember …' and I will keep it.",
+                "recall",
+                data={"facts": []},
+            )
         listed = "; ".join(f"{f.key}: {f.value}" for f in facts[:8])
         more = f" (+{len(facts) - 8} more)" if len(facts) > 8 else ""
-        return CommandResult(f"{_plural(len(facts), 'fact')} on file{more}: {listed}.", "recall", data={"facts": [{"id": str(f.id), "key": f.key, "value": f.value} for f in facts]}, navigate="/settings?tab=memory")
+        return CommandResult(
+            f"{_plural(len(facts), 'fact')} on file{more}: {listed}.",
+            "recall",
+            data={"facts": [{"id": str(f.id), "key": f.key, "value": f.value} for f in facts]},
+            navigate="/settings?tab=memory",
+        )
 
     async def _do_forget(self, args, text, ctx, confirmed) -> CommandResult:
         self._require_write()
         query = (args.get("query") or "").strip().rstrip(".")
         if query.lower() in ("everything", "all", "all of it") and not confirmed:
-            return CommandResult("Wipe every stored fact? Confirm.", "forget", confirm=_confirm("CLEAR MEMORY", "Delete all memory facts for this organization.", text))
+            return CommandResult(
+                "Wipe every stored fact? Confirm.",
+                "forget",
+                confirm=_confirm("CLEAR MEMORY", "Delete all memory facts for this organization.", text),
+            )
         removed = await forget(self.db, self.auth.org_id, query)
         if not removed:
             return CommandResult(f"Nothing matched '{query}'.", "forget", ok=False)
-        return CommandResult(f"Forgotten. {_plural(removed, 'fact')} removed.", "forget", actions=[{"type": "memory.forget", "count": removed}])
+        return CommandResult(
+            f"Forgotten. {_plural(removed, 'fact')} removed.",
+            "forget",
+            actions=[{"type": "memory.forget", "count": removed}],
+        )
 
     async def _do_open_page(self, args, text, ctx, confirmed) -> CommandResult:
         page = (args.get("page") or "").strip().lower()
@@ -648,8 +1109,14 @@ class Assistant:
         hex_match = HEX_PATTERN.fullmatch(raw) or HEX_PATTERN.search(raw)
         colour = f"#{hex_match.group(1).lower()}" if hex_match else COLOUR_NAMES.get(raw)
         if not colour:
-            return CommandResult(f"I do not know the colour '{raw}'. Try a name or a hex value.", "set_theme", ok=False)
-        return CommandResult(f"Retinting the HUD to {raw if raw in COLOUR_NAMES else colour}.", "set_theme", client={"action": "set_color", "value": colour})
+            return CommandResult(
+                f"I do not know the colour '{raw}'. Try a name or a hex value.", "set_theme", ok=False
+            )
+        return CommandResult(
+            f"Retinting the HUD to {raw if raw in COLOUR_NAMES else colour}.",
+            "set_theme",
+            client={"action": "set_color", "value": colour},
+        )
 
     async def _do_set_name(self, args, text, ctx, confirmed) -> CommandResult:
         name = (args.get("user_name") or "").strip().rstrip(".")[:40]
@@ -657,14 +1124,20 @@ class Assistant:
             return CommandResult("Give me a name to use.", "set_name", ok=False)
         await self._save_prefs(user_name=name)
         self.who = name
-        return CommandResult(f"Understood, {name}.", "set_name", client={"action": "set_user_name", "value": name})
+        return CommandResult(
+            f"Understood, {name}.", "set_name", client={"action": "set_user_name", "value": name}
+        )
 
     async def _do_set_assistant(self, args, text, ctx, confirmed) -> CommandResult:
         name = (args.get("assistant_name") or "").strip().rstrip(".")[:30]
         if not name:
             return CommandResult("Give me a name.", "set_assistant", ok=False)
         await self._save_prefs(assistant_name=name)
-        return CommandResult(f"{name} it is, {self.who}.", "set_assistant", client={"action": "set_assistant_name", "value": name})
+        return CommandResult(
+            f"{name} it is, {self.who}.",
+            "set_assistant",
+            client={"action": "set_assistant_name", "value": name},
+        )
 
     async def _save_prefs(self, **values: str) -> None:
         prefs = dict(self.auth.user.preferences or {})

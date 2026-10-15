@@ -136,4 +136,6 @@ INTERACTIVE_ELEMENTS_SCRIPT = r"""
 
 ELEMENT_BY_INDEX_SCRIPT = "(i) => (window.__ba_elements && window.__ba_elements[i]) || null"
 
-PAGE_TEXT_SCRIPT = "(max) => (document.body ? document.body.innerText : '').replace(/\\n{3,}/g, '\\n\\n').slice(0, max)"
+PAGE_TEXT_SCRIPT = (
+    "(max) => (document.body ? document.body.innerText : '').replace(/\\n{3,}/g, '\\n\\n').slice(0, max)"
+)

@@ -21,7 +21,12 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "config": {
             "visual_style": "cinematic",
             "platform_key": "mock",
-            "output_settings": {"resolution": "1080p", "aspect_ratio": "16:9", "clip_duration_seconds": 8, "filename_pattern": "scene_{index:03d}{ext}"},
+            "output_settings": {
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "clip_duration_seconds": 8,
+                "filename_pattern": "scene_{index:03d}{ext}",
+            },
             "task": {"max_retries": 3, "generation_timeout_seconds": 900},
         },
     },
@@ -31,7 +36,11 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "kind": "image_generation",
         "icon": "image",
         "description": "Generate a series of images from prompts on an AI image platform and download them in order.",
-        "config": {"visual_style": "photorealistic", "platform_key": "generic", "output_settings": {"filename_pattern": "image_{index:03d}{ext}", "clip_duration_seconds": 1}},
+        "config": {
+            "visual_style": "photorealistic",
+            "platform_key": "generic",
+            "output_settings": {"filename_pattern": "image_{index:03d}{ext}", "clip_duration_seconds": 1},
+        },
     },
     {
         "key": "research",
@@ -39,7 +48,10 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "kind": "research",
         "icon": "search",
         "description": "Browse websites, extract information and compile findings into the project folder.",
-        "config": {"platform_key": "generic", "instructions": "Research the topic below and save a summary as research.md in the project folder."},
+        "config": {
+            "platform_key": "generic",
+            "instructions": "Research the topic below and save a summary as research.md in the project folder.",
+        },
     },
     {
         "key": "data_entry",
@@ -47,7 +59,10 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "kind": "data_entry",
         "icon": "table",
         "description": "Fill web forms from structured data with verification after each submission.",
-        "config": {"platform_key": "generic", "instructions": "Enter each record into the form and confirm the success message before continuing."},
+        "config": {
+            "platform_key": "generic",
+            "instructions": "Enter each record into the form and confirm the success message before continuing.",
+        },
     },
     {
         "key": "website_testing",
@@ -55,7 +70,10 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "kind": "website_testing",
         "icon": "bug",
         "description": "Walk through user journeys, capture screenshots at each step and report failures.",
-        "config": {"platform_key": "generic", "instructions": "Execute the test steps below, capture a screenshot after each step and report any failures."},
+        "config": {
+            "platform_key": "generic",
+            "instructions": "Execute the test steps below, capture a screenshot after each step and report any failures.",
+        },
     },
     {
         "key": "content_creation",
@@ -63,7 +81,10 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "kind": "content_creation",
         "icon": "pen",
         "description": "Use chat assistants (ChatGPT, Gemini, Arena) to draft content and store the results.",
-        "config": {"platform_key": "chatgpt", "instructions": "Ask the assistant to write the content described below and save the answer as a text file."},
+        "config": {
+            "platform_key": "chatgpt",
+            "instructions": "Ask the assistant to write the content described below and save the answer as a text file.",
+        },
     },
     {
         "key": "browser_workflow",
@@ -77,7 +98,10 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
 
 
 async def ensure_builtin_templates(db: AsyncSession) -> None:
-    existing = {t.key for t in (await db.execute(select(Template).where(Template.is_builtin.is_(True)))).scalars().all()}
+    existing = {
+        t.key
+        for t in (await db.execute(select(Template).where(Template.is_builtin.is_(True)))).scalars().all()
+    }
     for spec in BUILTIN_TEMPLATES:
         if spec["key"] in existing:
             continue
@@ -88,14 +112,21 @@ async def ensure_builtin_templates(db: AsyncSession) -> None:
 async def list_templates(db: AsyncSession, org_id: uuid.UUID) -> list[Template]:
     await ensure_builtin_templates(db)
     result = await db.execute(
-        select(Template).where((Template.organization_id == org_id) | (Template.is_builtin.is_(True))).order_by(Template.is_builtin.desc(), Template.created_at)
+        select(Template)
+        .where((Template.organization_id == org_id) | (Template.is_builtin.is_(True)))
+        .order_by(Template.is_builtin.desc(), Template.created_at)
     )
     return list(result.scalars().all())
 
 
 async def create_template(db: AsyncSession, org_id: uuid.UUID, data: dict[str, Any]) -> Template:
     exists = (
-        await db.execute(select(Template.id).where(Template.key == data["key"], (Template.organization_id == org_id) | (Template.is_builtin.is_(True))))
+        await db.execute(
+            select(Template.id).where(
+                Template.key == data["key"],
+                (Template.organization_id == org_id) | (Template.is_builtin.is_(True)),
+            )
+        )
     ).scalar_one_or_none()
     if exists is not None:
         raise ConflictError("A template with this key already exists")
@@ -112,7 +143,9 @@ async def get_template(db: AsyncSession, org_id: uuid.UUID, template_id: uuid.UU
     return template
 
 
-async def update_template(db: AsyncSession, org_id: uuid.UUID, template_id: uuid.UUID, data: dict[str, Any]) -> Template:
+async def update_template(
+    db: AsyncSession, org_id: uuid.UUID, template_id: uuid.UUID, data: dict[str, Any]
+) -> Template:
     template = await get_template(db, org_id, template_id)
     if template.is_builtin:
         raise PermissionDeniedError("Built-in templates cannot be modified; duplicate them instead")

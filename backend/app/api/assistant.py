@@ -1,4 +1,4 @@
-"""JARVIS console endpoints: natural-language commands, briefing, memory, host telemetry."""
+"""AVINASH (assistant) console endpoints: natural-language commands, briefing, memory, host telemetry."""
 
 from __future__ import annotations
 
@@ -75,15 +75,26 @@ def _context(raw: dict[str, Any]) -> CommandContext:
 
 @router.post("/command", response_model=CommandResponse)
 async def command(payload: CommandRequest, request: Request, auth: CurrentAuth, db: DB) -> CommandResponse:
-    result = await Assistant(db, auth).handle(payload.text, _context(payload.context), confirmed=payload.confirmed)
+    result = await Assistant(db, auth).handle(
+        payload.text, _context(payload.context), confirmed=payload.confirmed
+    )
     if result.actions:
-        await audit(db, "assistant.command", request=request, user_id=auth.user_id, org_id=auth.org_id, data={"intent": result.intent, "actions": result.actions[:5]})
+        await audit(
+            db,
+            "assistant.command",
+            request=request,
+            user_id=auth.user_id,
+            org_id=auth.org_id,
+            data={"intent": result.intent, "actions": result.actions[:5]},
+        )
     await db.commit()
     return CommandResponse(**result.as_dict())
 
 
 @router.get("/briefing", response_model=dict)
-async def briefing(auth: CurrentAuth, db: DB, local_hour: int | None = Query(default=None, ge=0, le=23)) -> dict:
+async def briefing(
+    auth: CurrentAuth, db: DB, local_hour: int | None = Query(default=None, ge=0, le=23)
+) -> dict:
     return await assistant_service.briefing(db, auth, local_hour)
 
 
@@ -104,7 +115,9 @@ async def list_memory(auth: CurrentAuth, db: DB) -> list[MemoryOut]:
 
 @router.post("/memory", response_model=MemoryOut, status_code=status.HTTP_201_CREATED)
 async def add_memory(payload: MemoryIn, auth: CurrentAuth, db: DB, _: Writer) -> MemoryOut:
-    fact = await assistant_service.remember(db, auth, key=payload.key, value=payload.value, category=payload.category)
+    fact = await assistant_service.remember(
+        db, auth, key=payload.key, value=payload.value, category=payload.category
+    )
     await db.commit()
     return MemoryOut.model_validate(fact)
 

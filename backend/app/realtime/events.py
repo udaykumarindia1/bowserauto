@@ -68,7 +68,9 @@ def _serialize(value: Any) -> Any:
     return value
 
 
-def build_event(event_type: str, org_id: Any, payload: dict[str, Any] | None = None, **ids: Any) -> dict[str, Any]:
+def build_event(
+    event_type: str, org_id: Any, payload: dict[str, Any] | None = None, **ids: Any
+) -> dict[str, Any]:
     return {
         "type": event_type,
         "organization_id": str(org_id),
@@ -81,7 +83,9 @@ def build_event(event_type: str, org_id: Any, payload: dict[str, Any] | None = N
     }
 
 
-async def publish_event(event_type: str, org_id: Any, payload: dict[str, Any] | None = None, **ids: Any) -> dict[str, Any]:
+async def publish_event(
+    event_type: str, org_id: Any, payload: dict[str, Any] | None = None, **ids: Any
+) -> dict[str, Any]:
     """Publish a transient event (not persisted)."""
     event = build_event(event_type, org_id, payload, **ids)
     await get_bus().publish(org_channel(org_id), event)
@@ -123,8 +127,15 @@ async def emit(
         await db.commit()
     else:
         await db.flush()
-    event = build_event(event_type, org_id, {"message": message, "level": level, "log_id": str(log.id), **(payload or {})},
-                        task_id=task_id, project_id=project_id, session_id=session_id, scene_id=scene_id)
+    event = build_event(
+        event_type,
+        org_id,
+        {"message": message, "level": level, "log_id": str(log.id), **(payload or {})},
+        task_id=task_id,
+        project_id=project_id,
+        session_id=session_id,
+        scene_id=scene_id,
+    )
     await get_bus().publish(org_channel(org_id), event)
     return event
 

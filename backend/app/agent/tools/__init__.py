@@ -72,7 +72,9 @@ class ToolRegistry:
     def describe(self) -> str:
         lines = []
         for tool in self._tools.values():
-            params = ", ".join(f"{k}: {v.get('type', 'any')}" for k, v in tool.parameters.get("properties", {}).items())
+            params = ", ".join(
+                f"{k}: {v.get('type', 'any')}" for k, v in tool.parameters.get("properties", {}).items()
+            )
             lines.append(f"- {tool.name}({params}): {tool.description}")
         return "\n".join(lines)
 
@@ -130,7 +132,11 @@ async def t_open(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     await ctx.driver.goto(url)
-    return ToolResult(True, f"Opened {await ctx.driver.url()}", {"url": await ctx.driver.url(), "title": await ctx.driver.title()})
+    return ToolResult(
+        True,
+        f"Opened {await ctx.driver.url()}",
+        {"url": await ctx.driver.url(), "title": await ctx.driver.title()},
+    )
 
 
 async def t_back(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
@@ -152,13 +158,19 @@ async def t_click(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     target = _target(a)
     await ctx.driver.click(target)
     await asyncio.sleep(0.6)
-    return ToolResult(True, f"Clicked {a.get('text') or a.get('selector') or a.get('index')}", {"url": await ctx.driver.url()})
+    return ToolResult(
+        True,
+        f"Clicked {a.get('text') or a.get('selector') or a.get('index')}",
+        {"url": await ctx.driver.url()},
+    )
 
 
 async def t_type(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     target = _target(a)
     text = str(a.get("text_to_type", a.get("value", "")))
-    await ctx.driver.type(target, text, clear=bool(a.get("clear", True)), press_enter=bool(a.get("press_enter", False)))
+    await ctx.driver.type(
+        target, text, clear=bool(a.get("clear", True)), press_enter=bool(a.get("press_enter", False))
+    )
     return ToolResult(True, f"Typed {len(text)} characters")
 
 
@@ -204,7 +216,11 @@ async def t_download(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     dest = unique_path(ctx.downloads_dir / filename)
     shutil.move(str(result.path), dest)
     ctx.state["download_path"] = str(dest)
-    return ToolResult(True, f"Downloaded {dest.name} ({dest.stat().st_size} bytes)", {"download_path": str(dest), "size_bytes": dest.stat().st_size})
+    return ToolResult(
+        True,
+        f"Downloaded {dest.name} ({dest.stat().st_size} bytes)",
+        {"download_path": str(dest), "size_bytes": dest.stat().st_size},
+    )
 
 
 async def t_wait(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
@@ -213,7 +229,9 @@ async def t_wait(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
         ok = await ctx.driver.wait_for_text(str(a["text"]), timeout_ms=timeout_ms)
         return ToolResult(ok, f"Text {'appeared' if ok else 'did not appear'}: {a['text']}")
     if a.get("selector") or a.get("index") is not None:
-        ok = await ctx.driver.wait_for(_target(a), state=str(a.get("state", "visible")), timeout_ms=timeout_ms)
+        ok = await ctx.driver.wait_for(
+            _target(a), state=str(a.get("state", "visible")), timeout_ms=timeout_ms
+        )
         return ToolResult(ok, f"Element {'is' if ok else 'is not'} {a.get('state', 'visible')}")
     if a.get("url_contains"):
         ok = await ctx.driver.wait_for_url(str(a["url_contains"]), timeout_ms=timeout_ms)
@@ -249,7 +267,9 @@ async def t_page_text(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
 
 async def t_ax_tree(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     nodes = await ctx.driver.accessibility_tree(int(a.get("max_nodes", 200)))
-    summary = "\n".join(f"{n['role']}: {n['name']}" + (f" = {n['value']}" if n.get("value") else "") for n in nodes[:150])
+    summary = "\n".join(
+        f"{n['role']}: {n['name']}" + (f" = {n['value']}" if n.get("value") else "") for n in nodes[:150]
+    )
     return ToolResult(True, summary[:4000], {"nodes": nodes})
 
 
@@ -277,7 +297,9 @@ async def fs_save_file(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     if isinstance(content, (dict, list)):
         content = json.dumps(content, indent=2)
     path.write_text(str(content), encoding="utf-8")
-    return ToolResult(True, f"Saved {path.relative_to(ctx.project_dir)} ({path.stat().st_size} bytes)", {"path": str(path)})
+    return ToolResult(
+        True, f"Saved {path.relative_to(ctx.project_dir)} ({path.stat().st_size} bytes)", {"path": str(path)}
+    )
 
 
 async def fs_rename(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
@@ -309,8 +331,18 @@ async def fs_list(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
         return ToolResult(False, "Folder does not exist")
     entries = []
     for child in sorted(path.iterdir())[:200]:
-        entries.append({"name": child.name, "is_dir": child.is_dir(), "size": child.stat().st_size if child.is_file() else None})
-    summary = "\n".join(f"{'[dir] ' if e['is_dir'] else ''}{e['name']}" + (f" ({e['size']} B)" if e['size'] is not None else "") for e in entries)
+        entries.append(
+            {
+                "name": child.name,
+                "is_dir": child.is_dir(),
+                "size": child.stat().st_size if child.is_file() else None,
+            }
+        )
+    summary = "\n".join(
+        f"{'[dir] ' if e['is_dir'] else ''}{e['name']}"
+        + (f" ({e['size']} B)" if e["size"] is not None else "")
+        for e in entries
+    )
     return ToolResult(True, summary or "(empty)", {"entries": entries})
 
 
@@ -346,44 +378,251 @@ async def task_complete(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
 
 
 async def task_fail(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
-    return ToolResult(False, str(a.get("reason", "Failed")), {"retryable": bool(a.get("retryable", True))}, done=True, status="failed")
+    return ToolResult(
+        False,
+        str(a.get("reason", "Failed")),
+        {"retryable": bool(a.get("retryable", True))},
+        done=True,
+        status="failed",
+    )
 
 
 async def task_needs_human(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
-    return ToolResult(False, str(a.get("reason", "Human assistance required")), done=True, status="needs_human")
+    return ToolResult(
+        False, str(a.get("reason", "Human assistance required")), done=True, status="needs_human"
+    )
 
 
 def build_default_registry() -> ToolRegistry:
     r = ToolRegistry()
-    el = {"index": _p("integer", "element index from the page snapshot"), "selector": _p("string", "CSS selector (alternative to index)"), "text": _p("string", "visible text of the element (alternative)")}
-    r.register(Tool("browser.open", "Navigate to a URL", _schema(url=_p("string", "absolute URL"), __required__=["url"]), t_open))
+    el = {
+        "index": _p("integer", "element index from the page snapshot"),
+        "selector": _p("string", "CSS selector (alternative to index)"),
+        "text": _p("string", "visible text of the element (alternative)"),
+    }
+    r.register(
+        Tool(
+            "browser.open",
+            "Navigate to a URL",
+            _schema(url=_p("string", "absolute URL"), __required__=["url"]),
+            t_open,
+        )
+    )
     r.register(Tool("browser.back", "Go back in history", _schema(), t_back))
     r.register(Tool("browser.forward", "Go forward in history", _schema(), t_forward))
     r.register(Tool("browser.refresh", "Reload the page", _schema(), t_refresh))
     r.register(Tool("browser.click", "Click an element", _schema(**el), t_click))
-    r.register(Tool("browser.type", "Type into an input/textarea/contenteditable (clears first unless clear=false)", _schema(**el, text_to_type=_p("string", "text to type"), clear=_p("boolean", "clear existing value"), press_enter=_p("boolean", "press Enter afterwards"), __required__=["text_to_type"]), t_type))
-    r.register(Tool("browser.select", "Choose an option of a select/dropdown", _schema(**el, value=_p("string", "option value or label"), __required__=["value"]), t_select))
-    r.register(Tool("browser.scroll", "Scroll the page", _schema(direction=_p("string", "up|down|left|right"), amount=_p("integer", "pixels")), t_scroll))
-    r.register(Tool("browser.upload", "Upload reference file(s) via a file input or upload button", _schema(**el, files=_p("array", "file paths (defaults to the scene reference files)", items={"type": "string"})), t_upload))
-    r.register(Tool("browser.download", "Click a download control and save the resulting file", _schema(**el, filename=_p("string", "optional file name"), timeout_seconds=_p("integer", "max wait")), t_download))
-    r.register(Tool("browser.wait", "Wait for text/element/url or a few seconds", _schema(text=_p("string", "wait for this text"), selector=_p("string", "wait for this element"), state=_p("string", "visible|hidden"), url_contains=_p("string", "wait for url"), seconds=_p("number", "plain wait (max 30)"), timeout_seconds=_p("integer", "timeout")), t_wait))
-    r.register(Tool("browser.extract", "Extract text (or an attribute) from the page or an element", _schema(**el, attribute=_p("string", "attribute name, e.g. href")), t_extract))
-    r.register(Tool("browser.screenshot", "Capture a screenshot for the history", _schema(label=_p("string", "label")), t_screenshot))
+    r.register(
+        Tool(
+            "browser.type",
+            "Type into an input/textarea/contenteditable (clears first unless clear=false)",
+            _schema(
+                **el,
+                text_to_type=_p("string", "text to type"),
+                clear=_p("boolean", "clear existing value"),
+                press_enter=_p("boolean", "press Enter afterwards"),
+                __required__=["text_to_type"],
+            ),
+            t_type,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.select",
+            "Choose an option of a select/dropdown",
+            _schema(**el, value=_p("string", "option value or label"), __required__=["value"]),
+            t_select,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.scroll",
+            "Scroll the page",
+            _schema(direction=_p("string", "up|down|left|right"), amount=_p("integer", "pixels")),
+            t_scroll,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.upload",
+            "Upload reference file(s) via a file input or upload button",
+            _schema(
+                **el,
+                files=_p(
+                    "array", "file paths (defaults to the scene reference files)", items={"type": "string"}
+                ),
+            ),
+            t_upload,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.download",
+            "Click a download control and save the resulting file",
+            _schema(
+                **el, filename=_p("string", "optional file name"), timeout_seconds=_p("integer", "max wait")
+            ),
+            t_download,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.wait",
+            "Wait for text/element/url or a few seconds",
+            _schema(
+                text=_p("string", "wait for this text"),
+                selector=_p("string", "wait for this element"),
+                state=_p("string", "visible|hidden"),
+                url_contains=_p("string", "wait for url"),
+                seconds=_p("number", "plain wait (max 30)"),
+                timeout_seconds=_p("integer", "timeout"),
+            ),
+            t_wait,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.extract",
+            "Extract text (or an attribute) from the page or an element",
+            _schema(**el, attribute=_p("string", "attribute name, e.g. href")),
+            t_extract,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.screenshot",
+            "Capture a screenshot for the history",
+            _schema(label=_p("string", "label")),
+            t_screenshot,
+        )
+    )
     r.register(Tool("browser.get_url", "Return current URL and title", _schema(), t_get_url))
-    r.register(Tool("browser.get_page_text", "Return the visible page text", _schema(max_chars=_p("integer", "limit")), t_page_text))
-    r.register(Tool("browser.get_accessibility_tree", "Return the accessibility tree (roles/names)", _schema(max_nodes=_p("integer", "limit")), t_ax_tree))
-    r.register(Tool("browser.switch_tab", "Switch to another tab", _schema(index=_p("integer", "tab index"), __required__=["index"]), t_switch_tab))
-    r.register(Tool("browser.close_tab", "Close a tab", _schema(index=_p("integer", "tab index (default current)")), t_close_tab))
-    r.register(Tool("filesystem.create_folder", "Create a folder inside the project", _schema(path=_p("string", "relative path"), __required__=["path"]), fs_create_folder))
-    r.register(Tool("filesystem.save_file", "Save text content to a project file", _schema(path=_p("string", "relative path"), content=_p("string", "content"), __required__=["path", "content"]), fs_save_file))
-    r.register(Tool("filesystem.rename", "Rename a project file", _schema(path=_p("string", "relative path"), new_name=_p("string", "new file name"), __required__=["path", "new_name"]), fs_rename))
-    r.register(Tool("filesystem.move", "Move a project file", _schema(path=_p("string", "relative path"), destination=_p("string", "relative destination"), __required__=["path", "destination"]), fs_move))
-    r.register(Tool("filesystem.list", "List a project folder", _schema(path=_p("string", "relative path")), fs_list))
-    r.register(Tool("task.update_status", "Report a short status message to the user", _schema(message=_p("string", "status"), __required__=["message"]), task_update_status))
-    r.register(Tool("task.pause", "Pause the task (e.g. to let a human intervene)", _schema(reason=_p("string", "why")), task_pause))
+    r.register(
+        Tool(
+            "browser.get_page_text",
+            "Return the visible page text",
+            _schema(max_chars=_p("integer", "limit")),
+            t_page_text,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.get_accessibility_tree",
+            "Return the accessibility tree (roles/names)",
+            _schema(max_nodes=_p("integer", "limit")),
+            t_ax_tree,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.switch_tab",
+            "Switch to another tab",
+            _schema(index=_p("integer", "tab index"), __required__=["index"]),
+            t_switch_tab,
+        )
+    )
+    r.register(
+        Tool(
+            "browser.close_tab",
+            "Close a tab",
+            _schema(index=_p("integer", "tab index (default current)")),
+            t_close_tab,
+        )
+    )
+    r.register(
+        Tool(
+            "filesystem.create_folder",
+            "Create a folder inside the project",
+            _schema(path=_p("string", "relative path"), __required__=["path"]),
+            fs_create_folder,
+        )
+    )
+    r.register(
+        Tool(
+            "filesystem.save_file",
+            "Save text content to a project file",
+            _schema(
+                path=_p("string", "relative path"),
+                content=_p("string", "content"),
+                __required__=["path", "content"],
+            ),
+            fs_save_file,
+        )
+    )
+    r.register(
+        Tool(
+            "filesystem.rename",
+            "Rename a project file",
+            _schema(
+                path=_p("string", "relative path"),
+                new_name=_p("string", "new file name"),
+                __required__=["path", "new_name"],
+            ),
+            fs_rename,
+        )
+    )
+    r.register(
+        Tool(
+            "filesystem.move",
+            "Move a project file",
+            _schema(
+                path=_p("string", "relative path"),
+                destination=_p("string", "relative destination"),
+                __required__=["path", "destination"],
+            ),
+            fs_move,
+        )
+    )
+    r.register(
+        Tool("filesystem.list", "List a project folder", _schema(path=_p("string", "relative path")), fs_list)
+    )
+    r.register(
+        Tool(
+            "task.update_status",
+            "Report a short status message to the user",
+            _schema(message=_p("string", "status"), __required__=["message"]),
+            task_update_status,
+        )
+    )
+    r.register(
+        Tool(
+            "task.pause",
+            "Pause the task (e.g. to let a human intervene)",
+            _schema(reason=_p("string", "why")),
+            task_pause,
+        )
+    )
     r.register(Tool("task.resume", "Resume a paused task", _schema(), task_resume))
-    r.register(Tool("task.retry", "Abort the current attempt and retry from the start", _schema(reason=_p("string", "why")), task_retry))
-    r.register(Tool("task.complete", "Finish successfully. Include download_path when a file was downloaded.", _schema(message=_p("string", "summary"), download_path=_p("string", "downloaded file path")), task_complete))
-    r.register(Tool("task.fail", "Give up on the current goal", _schema(reason=_p("string", "why"), retryable=_p("boolean", "whether a retry could help")), task_fail))
-    r.register(Tool("task.needs_human", "Stop and ask the user to take over (login, CAPTCHA, MFA, consent, payment)", _schema(reason=_p("string", "what the human must do"), __required__=["reason"]), task_needs_human))
+    r.register(
+        Tool(
+            "task.retry",
+            "Abort the current attempt and retry from the start",
+            _schema(reason=_p("string", "why")),
+            task_retry,
+        )
+    )
+    r.register(
+        Tool(
+            "task.complete",
+            "Finish successfully. Include download_path when a file was downloaded.",
+            _schema(message=_p("string", "summary"), download_path=_p("string", "downloaded file path")),
+            task_complete,
+        )
+    )
+    r.register(
+        Tool(
+            "task.fail",
+            "Give up on the current goal",
+            _schema(reason=_p("string", "why"), retryable=_p("boolean", "whether a retry could help")),
+            task_fail,
+        )
+    )
+    r.register(
+        Tool(
+            "task.needs_human",
+            "Stop and ask the user to take over (login, CAPTCHA, MFA, consent, payment)",
+            _schema(reason=_p("string", "what the human must do"), __required__=["reason"]),
+            task_needs_human,
+        )
+    )
     return r

@@ -78,6 +78,12 @@ async def main() -> int:
             await page.click("button[type=submit]")
             await page.wait_for_url("**/dashboard", timeout=15000)
         await page.screenshot(path=str(out / "login-done.png"))
+        # A 409 (account already exists) or 401 during the sign-in dance is expected noise, not an app error.
+        signin_noise = [e for e in console_errors if "status of 409" in e or "status of 401" in e]
+        for e in signin_noise:
+            console_errors.remove(e)
+        if signin_noise:
+            print(f"sign-in phase produced {len(signin_noise)} expected auth response(s); ignored")
 
         for route in args.routes:
             name = route.strip("/").replace("/", "_").replace("?", "_").replace("=", "-") or "root"

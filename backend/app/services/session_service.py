@@ -30,7 +30,17 @@ def _now() -> datetime:
 
 
 async def list_sessions(db: AsyncSession, org_id: uuid.UUID) -> list[BrowserSession]:
-    rows = (await db.execute(select(BrowserSession).where(BrowserSession.organization_id == org_id).order_by(BrowserSession.created_at.desc()))).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(BrowserSession)
+                .where(BrowserSession.organization_id == org_id)
+                .order_by(BrowserSession.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     now = _now()
     stale = timedelta(seconds=get_settings().worker_stale_after_seconds)
     for s in rows:
@@ -40,7 +50,11 @@ async def list_sessions(db: AsyncSession, org_id: uuid.UUID) -> list[BrowserSess
 
 def _apply_liveness(session: BrowserSession, now: datetime, stale: timedelta) -> None:
     """A session hosted by a dead worker must not look 'ready' forever."""
-    if session.status in (BrowserSessionStatus.ready.value, BrowserSessionStatus.in_use.value, BrowserSessionStatus.launching.value):
+    if session.status in (
+        BrowserSessionStatus.ready.value,
+        BrowserSessionStatus.in_use.value,
+        BrowserSessionStatus.launching.value,
+    ):
         hb = session.last_heartbeat_at
         if hb is not None and hb.tzinfo is None:
             hb = hb.replace(tzinfo=UTC)
@@ -66,9 +80,15 @@ async def get_session(db: AsyncSession, org_id: uuid.UUID, session_id: uuid.UUID
 async def create_session(db: AsyncSession, auth: AuthContext, data: dict[str, Any]) -> BrowserSession:
     settings = get_settings()
     limits = effective_limits(auth.organization)
-    count = (await db.execute(select(func.count(BrowserSession.id)).where(BrowserSession.organization_id == auth.org_id))).scalar_one()
+    count = (
+        await db.execute(
+            select(func.count(BrowserSession.id)).where(BrowserSession.organization_id == auth.org_id)
+        )
+    ).scalar_one()
     if count >= limits["max_browser_sessions"]:
-        raise LimitExceededError(f"Organizations are limited to {limits['max_browser_sessions']} browser sessions")
+        raise LimitExceededError(
+            f"Organizations are limited to {limits['max_browser_sessions']} browser sessions"
+        )
     adapter_cls = get_adapter_class(data.get("platform_key") or "generic")
     if adapter_cls is None:
         raise ValidationFailed("Unknown platform")
@@ -96,7 +116,14 @@ async def create_session(db: AsyncSession, auth: AuthContext, data: dict[str, An
     )
     db.add(session)
     await db.flush()
-    await emit(db, "session.updated", auth.org_id, f"Browser session '{session.name}' created", session_id=session.id, payload={"status": session.status})
+    await emit(
+        db,
+        "session.updated",
+        auth.org_id,
+        f"Browser session '{session.name}' created",
+        session_id=session.id,
+        payload={"status": session.status},
+    )
     await db.commit()
     return session
 
@@ -113,7 +140,9 @@ async def update_session(db: AsyncSession, session: BrowserSession, data: dict[s
     return session
 
 
-async def request_open(db: AsyncSession, session: BrowserSession, *, interactive: bool = True, url: str | None = None) -> BrowserSession:
+async def request_open(
+    db: AsyncSession, session: BrowserSession, *, interactive: bool = True, url: str | None = None
+) -> BrowserSession:
     if session.status == BrowserSessionStatus.expired.value:
         session.expires_at = _now() + timedelta(days=get_settings().session_expiry_days)
         session.status = BrowserSessionStatus.closed.value
@@ -125,10 +154,20 @@ async def request_open(db: AsyncSession, session: BrowserSession, *, interactive
     if session.status == BrowserSessionStatus.closed.value:
         session.status = BrowserSessionStatus.launching.value
         session.error = ""
-    await emit(db, "session.updated", session.organization_id, f"Opening browser session '{session.name}'", session_id=session.id, payload={"status": session.status, "interactive": interactive})
+    await emit(
+        db,
+        "session.updated",
+        session.organization_id,
+        f"Opening browser session '{session.name}'",
+        session_id=session.id,
+        payload={"status": session.status, "interactive": interactive},
+    )
     await db.commit()
     await get_bus().publish(WORKER_WAKEUP, {"session_id": str(session.id), "action": "open"})
-    await get_bus().publish(input_channel(session.id), {"type": "control", "action": "open", "interactive": interactive, "url": url})
+    await get_bus().publish(
+        input_channel(session.id),
+        {"type": "control", "action": "open", "interactive": interactive, "url": url},
+    )
     return session
 
 
@@ -139,7 +178,14 @@ async def request_close(db: AsyncSession, session: BrowserSession) -> BrowserSes
             raise ConflictError("A task is using this session; stop the task first")
     session.desired_state = "closed"
     session.interactive = False
-    await emit(db, "session.updated", session.organization_id, f"Closing browser session '{session.name}'", session_id=session.id, payload={"status": session.status})
+    await emit(
+        db,
+        "session.updated",
+        session.organization_id,
+        f"Closing browser session '{session.name}'",
+        session_id=session.id,
+        payload={"status": session.status},
+    )
     await db.commit()
     await get_bus().publish(input_channel(session.id), {"type": "control", "action": "close"})
     await get_bus().publish(WORKER_WAKEUP, {"session_id": str(session.id), "action": "close"})
@@ -158,7 +204,9 @@ async def set_interactive(db: AsyncSession, session: BrowserSession, interactive
         payload={"interactive": interactive},
     )
     await db.commit()
-    await get_bus().publish(input_channel(session.id), {"type": "control", "action": "interactive", "interactive": interactive})
+    await get_bus().publish(
+        input_channel(session.id), {"type": "control", "action": "interactive", "interactive": interactive}
+    )
     return session
 
 
@@ -170,14 +218,25 @@ async def navigate(db: AsyncSession, session: BrowserSession, url: str) -> None:
 
 async def logout_session(db: AsyncSession, session: BrowserSession) -> BrowserSession:
     """Forget the stored login state: wipe the profile directory and encrypted storage state."""
-    if session.status in (BrowserSessionStatus.ready.value, BrowserSessionStatus.in_use.value, BrowserSessionStatus.launching.value):
+    if session.status in (
+        BrowserSessionStatus.ready.value,
+        BrowserSessionStatus.in_use.value,
+        BrowserSessionStatus.launching.value,
+    ):
         raise ConflictError("Close the session before logging out")
     _wipe_profile(Path(session.profile_dir))
     session.storage_state_encrypted = None
     session.login_status = "logged_out"
     session.current_url = ""
     session.current_title = ""
-    await emit(db, "session.updated", session.organization_id, f"Browser session '{session.name}' logged out", session_id=session.id, payload={"login_status": "logged_out"})
+    await emit(
+        db,
+        "session.updated",
+        session.organization_id,
+        f"Browser session '{session.name}' logged out",
+        session_id=session.id,
+        payload={"login_status": "logged_out"},
+    )
     await db.commit()
     return session
 
@@ -194,7 +253,9 @@ async def delete_session(db: AsyncSession, session: BrowserSession) -> None:
     await db.delete(session)
     await db.commit()
     _wipe_profile(profile)
-    await emit(db, "session.updated", org_id, "Browser session deleted", payload={"deleted": True}, commit=True)
+    await emit(
+        db, "session.updated", org_id, "Browser session deleted", payload={"deleted": True}, commit=True
+    )
 
 
 def _wipe_profile(profile: Path) -> None:

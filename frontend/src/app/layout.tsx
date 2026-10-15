@@ -4,8 +4,8 @@ import "./globals.css";
 import { Providers } from "@/components/layout/providers";
 
 export const metadata: Metadata = {
-  title: { default: "JARVIS · BowserAuto", template: "%s · JARVIS" },
-  description: "JARVIS-style AI browser automation workspace: persistent browser sessions, task agent, live viewer and human takeover.",
+  title: { default: "AVINASH · BowserAuto", template: "%s · AVINASH" },
+  description: "AVINASH — a JARVIS-style AI browser automation workspace: persistent browser sessions, task agent, live viewer and human takeover.",
   icons: { icon: "/favicon.svg" },
 };
 

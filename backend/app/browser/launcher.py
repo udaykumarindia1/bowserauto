@@ -68,7 +68,12 @@ def _playwright_managed_chromium() -> str | None:
         if not root.exists():
             continue
         for child in sorted(root.glob("chromium*-*"), reverse=True):
-            for name in ("chrome-linux/chrome", "chrome-linux/headless_shell", "chrome-linux64/chrome", "chrome-mac/Chromium.app/Contents/MacOS/Chromium"):
+            for name in (
+                "chrome-linux/chrome",
+                "chrome-linux/headless_shell",
+                "chrome-linux64/chrome",
+                "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+            ):
                 exe = child / name
                 if exe.exists():
                     return str(exe)
@@ -111,7 +116,13 @@ def resolve_launch_config() -> LaunchConfig:
     if source in ("fallback", "env") and "--no-sandbox" not in args:
         # Bundled headless-shell builds have no setuid sandbox helper.
         args.append("--no-sandbox")
-    return LaunchConfig(executable_path=executable, env=env, args=args, headless=settings.browser_headless, source=source if executable else "none")
+    return LaunchConfig(
+        executable_path=executable,
+        env=env,
+        args=args,
+        headless=settings.browser_headless,
+        source=source if executable else "none",
+    )
 
 
 def browser_available() -> bool:

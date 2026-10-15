@@ -47,7 +47,7 @@ const LOG_EVENTS: Record<string, "info" | "warning" | "error" | "success"> = {
 };
 
 /**
- * The JARVIS controller: one instance mounted in the shell. Owns command submission, the
+ * The assistant (AVINASH) controller: one instance mounted in the shell. Owns command submission, the
  * confirmation gate, spoken replies, microphone capture (push-to-talk + wake word), the
  * waveform level meter, global shortcuts and the live event → console log bridge.
  */
@@ -276,7 +276,7 @@ export function useJarvisController(enabled: boolean) {
     else startListening();
   }, [js, startListening, stopListening]);
 
-  // Wake word ("Hey JARVIS …") — a continuous, client-side recogniser that only acts on the phrase.
+  // Wake word ("Hey AVINASH …") — a continuous, client-side recogniser that only acts on the phrase.
   useEffect(() => {
     if (!enabled) return;
     const sync = () => {

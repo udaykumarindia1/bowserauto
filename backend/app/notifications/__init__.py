@@ -114,7 +114,13 @@ class WebhookProvider:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
                     str(s.notification_webhook_url),
-                    json={"kind": notification.kind, "title": notification.title, "body": notification.body, "severity": notification.severity, "data": notification.data},
+                    json={
+                        "kind": notification.kind,
+                        "title": notification.title,
+                        "body": notification.body,
+                        "severity": notification.severity,
+                        "data": notification.data,
+                    },
                 )
                 return 200 <= resp.status_code < 300
         except Exception as exc:

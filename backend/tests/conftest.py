@@ -73,7 +73,15 @@ class ApiClient:
             headers.update(extra)
         return headers
 
-    async def request(self, method: str, url: str, *, csrf: bool = True, headers: dict[str, str] | None = None, **kwargs: Any) -> httpx.Response:
+    async def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        csrf: bool = True,
+        headers: dict[str, str] | None = None,
+        **kwargs: Any,
+    ) -> httpx.Response:
         return await self.http.request(method, url, headers=self._headers(headers, csrf=csrf), **kwargs)
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
@@ -88,9 +96,19 @@ class ApiClient:
     async def delete(self, url: str, **kwargs: Any) -> httpx.Response:
         return await self.request("DELETE", url, **kwargs)
 
-    async def register(self, email: str | None = None, *, organization_name: str | None = None, full_name: str = "Test User") -> dict[str, Any]:
+    async def register(
+        self, email: str | None = None, *, organization_name: str | None = None, full_name: str = "Test User"
+    ) -> dict[str, Any]:
         email = email or f"user-{uuid.uuid4().hex[:10]}@example.com"
-        response = await self.post("/api/auth/register", json={"email": email, "password": PASSWORD, "full_name": full_name, "organization_name": organization_name or f"Org {email.split('@')[0]}"})
+        response = await self.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": PASSWORD,
+                "full_name": full_name,
+                "organization_name": organization_name or f"Org {email.split('@')[0]}",
+            },
+        )
         assert response.status_code == 201, response.text
         data = response.json()
         self.csrf = data["csrf_token"]
@@ -109,7 +127,9 @@ class ApiClient:
         return response
 
     # ----------------------------------------------------------------- domain helpers
-    async def create_project(self, *, script: str | None = None, platform_key: str = "mock", analyze: bool = True, **overrides: Any) -> dict[str, Any]:
+    async def create_project(
+        self, *, script: str | None = None, platform_key: str = "mock", analyze: bool = True, **overrides: Any
+    ) -> dict[str, Any]:
         payload = {
             "name": overrides.pop("name", f"Project {uuid.uuid4().hex[:6]}"),
             "template_key": overrides.pop("template_key", "ai_video_generation"),
@@ -121,7 +141,9 @@ class ApiClient:
         assert response.status_code == 201, response.text
         project = response.json()
         if analyze and payload["script_text"]:
-            response = await self.post(f"/api/projects/{project['id']}/analyze", json={"replace_existing": True})
+            response = await self.post(
+                f"/api/projects/{project['id']}/analyze", json={"replace_existing": True}
+            )
             assert response.status_code == 200, response.text
         return project
 
@@ -130,7 +152,9 @@ class ApiClient:
         assert response.status_code == 200, response.text
         return response.json()
 
-    async def create_session(self, *, name: str = "Mock session", platform_key: str = "mock", open: bool = True) -> dict[str, Any]:
+    async def create_session(
+        self, *, name: str = "Mock session", platform_key: str = "mock", open: bool = True
+    ) -> dict[str, Any]:
         response = await self.post("/api/sessions", json={"name": name, "platform_key": platform_key})
         assert response.status_code == 201, response.text
         session = response.json()
@@ -152,7 +176,14 @@ class ApiClient:
             await asyncio.sleep(0.05)
         raise AssertionError(f"session did not reach {statuses}: {last}")
 
-    async def create_task(self, project_id: str, *, session_id: str | None = None, config: dict[str, Any] | None = None, **extra: Any) -> dict[str, Any]:
+    async def create_task(
+        self,
+        project_id: str,
+        *,
+        session_id: str | None = None,
+        config: dict[str, Any] | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {"project_id": project_id, "config": config or {}, **extra}
         if session_id:
             payload["browser_session_id"] = session_id
@@ -165,7 +196,9 @@ class ApiClient:
         assert response.status_code == 200, response.text
         return response.json()
 
-    async def wait_until(self, task_id: str, predicate: Callable[[dict[str, Any]], bool], timeout: float = 30) -> dict[str, Any]:
+    async def wait_until(
+        self, task_id: str, predicate: Callable[[dict[str, Any]], bool], timeout: float = 30
+    ) -> dict[str, Any]:
         deadline = asyncio.get_running_loop().time() + timeout
         last: dict[str, Any] = {}
         while asyncio.get_running_loop().time() < deadline:
@@ -173,7 +206,9 @@ class ApiClient:
             if predicate(last):
                 return last
             await asyncio.sleep(0.05)
-        raise AssertionError(f"condition not met within {timeout}s: status={last.get('status')} action={last.get('current_action')} attention={last.get('attention')}")
+        raise AssertionError(
+            f"condition not met within {timeout}s: status={last.get('status')} action={last.get('current_action')} attention={last.get('attention')}"
+        )
 
     async def wait_task(self, task_id: str, statuses: set[str], timeout: float = 30) -> dict[str, Any]:
         deadline = asyncio.get_running_loop().time() + timeout
@@ -183,7 +218,9 @@ class ApiClient:
             if last["status"] in statuses:
                 return last
             await asyncio.sleep(0.05)
-        raise AssertionError(f"task did not reach {statuses} within {timeout}s: status={last.get('status')} action={last.get('current_action')} error={last.get('error')} attention={last.get('attention')}")
+        raise AssertionError(
+            f"task did not reach {statuses} within {timeout}s: status={last.get('status')} action={last.get('current_action')} error={last.get('error')} attention={last.get('attention')}"
+        )
 
 
 SAMPLE_SCRIPT = """Scene 1: A lighthouse keeper climbs the spiral staircase at dusk, lantern in hand.

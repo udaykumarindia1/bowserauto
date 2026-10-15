@@ -13,13 +13,23 @@ class MockPlatformAdapter(PlatformAdapter):
     key = "mock"
     name = "Mock Video Generator"
     category = "video"
-    description = "Built-in demo platform that simulates generate → wait → download without external AI services."
+    description = (
+        "Built-in demo platform that simulates generate → wait → download without external AI services."
+    )
     requires_login = False
     verified = True
     notes = "Use it to test queues, the live browser view, takeover, retries and downloads for free."
-    capabilities: ClassVar[dict[str, Any]] = {"max_clip_seconds": 10, "aspect_ratios": ["16:9", "9:16", "1:1"], "reference_images": True, "negative_prompt": False, "durations": [5, 8, 10]}
+    capabilities: ClassVar[dict[str, Any]] = {
+        "max_clip_seconds": 10,
+        "aspect_ratios": ["16:9", "9:16", "1:1"],
+        "reference_images": True,
+        "negative_prompt": False,
+        "durations": [5, 8, 10],
+    }
     selectors: ClassVar[dict[str, Any]] = {
-        "prompt_input": {"any": [{"testid": "prompt"}, {"placeholder": "/describe the video/i"}, {"css": "textarea"}]},
+        "prompt_input": {
+            "any": [{"testid": "prompt"}, {"placeholder": "/describe the video/i"}, {"css": "textarea"}]
+        },
         "upload": {"css": "input[type=file]"},
         "generate_button": {"any": [{"testid": "generate"}, {"role": "button", "name": "/^generate$/i"}]},
         "download_button": {"any": [{"role": "link", "name": "/download video/i"}, {"css": "a#download"}]},
@@ -59,7 +69,9 @@ class MockPlatformAdapter(PlatformAdapter):
     def requires_login_now(self) -> bool:
         return bool((self.config.get("mock_options") or {}).get("login_required"))
 
-    async def detect_login_required(self, ctx: AdapterContext, text: str | None = None, url: str | None = None) -> bool:  # type: ignore[override]
+    async def detect_login_required(
+        self, ctx: AdapterContext, text: str | None = None, url: str | None = None
+    ) -> bool:  # type: ignore[override]
         try:
             return await ctx.driver.exists(self.selectors["login_indicator"])
         except Exception:
@@ -73,13 +85,19 @@ class MockPlatformAdapter(PlatformAdapter):
         if current.rstrip("/?") != url.rstrip("/?"):
             await ctx.say("Opening Mock Video Generator")
             await ctx.driver.goto(url)
-        await ctx.driver.wait_for({"any": [self.selectors["prompt_input"], self.selectors["login_indicator"]]}, timeout_ms=15_000)
+        await ctx.driver.wait_for(
+            {"any": [self.selectors["prompt_input"], self.selectors["login_indicator"]]}, timeout_ms=15_000
+        )
         await self.check_blockers(ctx)
 
     async def check_blockers(self, ctx: AdapterContext) -> None:
         from app.core.errors import HumanInterventionRequired, LoginRequired
 
         if await ctx.driver.exists(self.selectors["login_indicator"]):
-            raise LoginRequired("Mock Video Generator is asking you to sign in. Take over the browser and sign in (any email/password works).")
+            raise LoginRequired(
+                "Mock Video Generator is asking you to sign in. Take over the browser and sign in (any email/password works)."
+            )
         if await ctx.driver.exists(self.selectors["human_check"]):
-            raise HumanInterventionRequired("Mock Video Generator is showing a 'Verify you are human' check. Take over the browser to complete it.")
+            raise HumanInterventionRequired(
+                "Mock Video Generator is showing a 'Verify you are human' check. Take over the browser to complete it."
+            )

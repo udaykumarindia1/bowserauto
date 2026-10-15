@@ -171,7 +171,7 @@ export function Topbar() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <IconButton label={consoleOpen ? "Hide JARVIS console" : "Show JARVIS console"} onClick={() => setConsoleOpen(!consoleOpen)} active={consoleOpen}>
+      <IconButton label={consoleOpen ? `Hide ${prefs.assistantName} console` : `Show ${prefs.assistantName} console`} onClick={() => setConsoleOpen(!consoleOpen)} active={consoleOpen}>
         <PanelRight className="h-3.5 w-3.5" />
       </IconButton>
       <HudClock className="ml-1 hidden w-[112px] md:block" />

@@ -33,7 +33,9 @@ def test_heuristic_parser_honours_explicit_scene_markers() -> None:
     script = """Scene 1: Dawn over the harbour. Mira walks along the pier.
 Scene 2: Interior, lighthouse. Mira finds an old map.
 Scene 3: Night. A storm rolls in over the sea."""
-    ctx = AnalysisContext(visual_style="watercolor", characters=[{"name": "Mira", "description": "young sailor"}])
+    ctx = AnalysisContext(
+        visual_style="watercolor", characters=[{"name": "Mira", "description": "young sailor"}]
+    )
     result = HeuristicSceneAnalyzer().analyze(script, ctx)
     assert result.method == "heuristic"
     assert len(result.scenes) == 3
@@ -46,7 +48,10 @@ Scene 3: Night. A storm rolls in over the sea."""
 
 
 def test_heuristic_parser_splits_free_text_and_respects_limits() -> None:
-    paragraphs = "\n\n".join(f"A long paragraph number {i} describing a new location and a new action happening." for i in range(12))
+    paragraphs = "\n\n".join(
+        f"A long paragraph number {i} describing a new location and a new action happening."
+        for i in range(12)
+    )
     result = HeuristicSceneAnalyzer().analyze(paragraphs, AnalysisContext(max_scenes=5))
     assert len(result.scenes) == 5
     assert any("truncated" in w for w in result.warnings)
@@ -56,14 +61,26 @@ def test_heuristic_parser_splits_free_text_and_respects_limits() -> None:
 
 def test_heuristic_parser_fits_target_duration() -> None:
     script = "Scene 1: Opening shot.\nScene 2: Middle.\nScene 3: Finale."
-    short = HeuristicSceneAnalyzer().analyze(script, AnalysisContext(clip_duration_seconds=5, target_duration_seconds=60))
+    short = HeuristicSceneAnalyzer().analyze(
+        script, AnalysisContext(clip_duration_seconds=5, target_duration_seconds=60)
+    )
     # Three one-line scenes cannot fill 60s with 5s clips: durations are stretched to the clip
     # length and the user is warned instead of silently inventing content.
     assert all(s.duration_seconds == 5 for s in short.scenes)
     assert any("target" in w for w in short.warnings)
-    long_script = "\n".join(f"Scene {i}: " + " ".join(["The camera drifts slowly across the valley while birds circle."] * 6) for i in range(1, 4))
-    fitted = HeuristicSceneAnalyzer().analyze(long_script, AnalysisContext(clip_duration_seconds=8, target_duration_seconds=20))
-    assert sum(s.duration_seconds for s in fitted.scenes) < sum(s.duration_seconds for s in HeuristicSceneAnalyzer().analyze(long_script, AnalysisContext(clip_duration_seconds=8)).scenes)
+    long_script = "\n".join(
+        f"Scene {i}: " + " ".join(["The camera drifts slowly across the valley while birds circle."] * 6)
+        for i in range(1, 4)
+    )
+    fitted = HeuristicSceneAnalyzer().analyze(
+        long_script, AnalysisContext(clip_duration_seconds=8, target_duration_seconds=20)
+    )
+    assert sum(s.duration_seconds for s in fitted.scenes) < sum(
+        s.duration_seconds
+        for s in HeuristicSceneAnalyzer()
+        .analyze(long_script, AnalysisContext(clip_duration_seconds=8))
+        .scenes
+    )
 
 
 async def test_analyze_script_without_llm_uses_heuristics() -> None:
@@ -82,7 +99,14 @@ def _context(site: FakeVideoSite) -> tuple[AdapterContext, FakeDriver]:
     async def screenshot(_stage: str) -> None:
         return None
 
-    ctx = AdapterContext(driver=driver, control=ControlToken(), scene=SceneSpec(index=1, code="scene_001", prompt="a kite"), log=log, screenshot=screenshot, generation_timeout_seconds=5)
+    ctx = AdapterContext(
+        driver=driver,
+        control=ControlToken(),
+        scene=SceneSpec(index=1, code="scene_001", prompt="a kite"),
+        log=log,
+        screenshot=screenshot,
+        generation_timeout_seconds=5,
+    )
     return ctx, driver
 
 
@@ -143,10 +167,30 @@ def test_retry_policy_backoff_is_bounded() -> None:
 
 # ---------------------------------------------------------------------------- files
 def test_scene_filename_patterns() -> None:
-    assert format_scene_filename("", index=1, code="scene_001", project_name="My Film", platform="mock", ext="mp4") == "scene_001.mp4"
-    assert format_scene_filename("{project}_{code}{ext}", index=2, code="scene_002", project_name="My Film!", platform="mock", ext=".mp4") == "My_Film_scene_002.mp4"
+    assert (
+        format_scene_filename(
+            "", index=1, code="scene_001", project_name="My Film", platform="mock", ext="mp4"
+        )
+        == "scene_001.mp4"
+    )
+    assert (
+        format_scene_filename(
+            "{project}_{code}{ext}",
+            index=2,
+            code="scene_002",
+            project_name="My Film!",
+            platform="mock",
+            ext=".mp4",
+        )
+        == "My_Film_scene_002.mp4"
+    )
     # Broken patterns fall back to the default naming instead of raising.
-    assert format_scene_filename("{nope}", index=3, code="scene_003", project_name="p", platform="mock", ext="mp4") == "scene_003.mp4"
+    assert (
+        format_scene_filename(
+            "{nope}", index=3, code="scene_003", project_name="p", platform="mock", ext="mp4"
+        )
+        == "scene_003.mp4"
+    )
 
 
 def test_safe_filename_and_path_traversal_protection(tmp_path: Path) -> None:
@@ -198,7 +242,9 @@ def test_password_hashing_and_secret_encryption() -> None:
 def test_signed_payloads_expire_and_reject_tampering() -> None:
     token = sign_payload({"k": "generated", "f": "abc"}, ttl_seconds=60)
     payload = verify_signed_payload(token)
-    assert payload and payload["k"] == "generated" and payload["f"] == "abc" and payload["exp"] > payload["iat"]
+    assert (
+        payload and payload["k"] == "generated" and payload["f"] == "abc" and payload["exp"] > payload["iat"]
+    )
     assert verify_signed_payload(token[:-2] + "zz") is None
     expired = sign_payload({"k": "generated"}, ttl_seconds=-1)
     assert verify_signed_payload(expired) is None

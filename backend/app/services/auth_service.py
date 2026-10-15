@@ -34,14 +34,18 @@ async def _unique_slug(db: AsyncSession, base: str) -> str:
     slug = _slugify(base)
     candidate = slug
     for _ in range(50):
-        exists = (await db.execute(select(Organization.id).where(Organization.slug == candidate))).scalar_one_or_none()
+        exists = (
+            await db.execute(select(Organization.id).where(Organization.slug == candidate))
+        ).scalar_one_or_none()
         if exists is None:
             return candidate
         candidate = f"{slug}-{secrets.token_hex(2)}"
     return f"{slug}-{secrets.token_hex(4)}"
 
 
-async def register_user(db: AsyncSession, *, email: str, password: str, full_name: str = "", organization_name: str | None = None) -> tuple[User, Organization]:
+async def register_user(
+    db: AsyncSession, *, email: str, password: str, full_name: str = "", organization_name: str | None = None
+) -> tuple[User, Organization]:
     settings = get_settings()
     email = email.strip().lower()
     if not settings.allow_registration:
@@ -55,10 +59,17 @@ async def register_user(db: AsyncSession, *, email: str, password: str, full_nam
     if exists is not None:
         raise ConflictError("An account with this email already exists")
     first_user = (await db.execute(select(User.id).limit(1))).scalar_one_or_none() is None
-    user = User(email=email, password_hash=hash_password(password), full_name=full_name.strip(), is_superuser=first_user)
+    user = User(
+        email=email,
+        password_hash=hash_password(password),
+        full_name=full_name.strip(),
+        is_superuser=first_user,
+    )
     db.add(user)
     await db.flush()
-    org_name = (organization_name or "").strip() or (f"{full_name.strip()}'s Workspace" if full_name.strip() else f"{email.split('@')[0]}'s Workspace")
+    org_name = (organization_name or "").strip() or (
+        f"{full_name.strip()}'s Workspace" if full_name.strip() else f"{email.split('@')[0]}'s Workspace"
+    )
     organization = Organization(name=org_name[:200], slug=await _unique_slug(db, org_name))
     db.add(organization)
     await db.flush()
@@ -86,7 +97,9 @@ async def authenticate(db: AsyncSession, *, email: str, password: str) -> User:
     return user
 
 
-async def create_auth_session(db: AsyncSession, user: User, *, user_agent: str = "", ip_address: str = "") -> tuple[AuthSession, str]:
+async def create_auth_session(
+    db: AsyncSession, user: User, *, user_agent: str = "", ip_address: str = ""
+) -> tuple[AuthSession, str]:
     token = generate_session_token()
     auth_session = AuthSession(
         user_id=user.id,
@@ -105,8 +118,18 @@ async def revoke_auth_session(db: AsyncSession, auth_session: AuthSession) -> No
     auth_session.revoked_at = datetime.now(UTC)
 
 
-async def revoke_all_sessions(db: AsyncSession, user_id: uuid.UUID, except_id: uuid.UUID | None = None) -> int:
-    sessions = (await db.execute(select(AuthSession).where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None)))).scalars().all()
+async def revoke_all_sessions(
+    db: AsyncSession, user_id: uuid.UUID, except_id: uuid.UUID | None = None
+) -> int:
+    sessions = (
+        (
+            await db.execute(
+                select(AuthSession).where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+            )
+        )
+        .scalars()
+        .all()
+    )
     count = 0
     now = datetime.now(UTC)
     for s in sessions:
@@ -141,7 +164,9 @@ async def list_memberships(db: AsyncSession, user_id: uuid.UUID) -> list[tuple[O
 async def switch_organization(db: AsyncSession, user: User, organization_id: uuid.UUID) -> Organization:
     membership = (
         await db.execute(
-            select(OrganizationMember).where(OrganizationMember.user_id == user.id, OrganizationMember.organization_id == organization_id)
+            select(OrganizationMember).where(
+                OrganizationMember.user_id == user.id, OrganizationMember.organization_id == organization_id
+            )
         )
     ).scalar_one_or_none()
     if membership is None:

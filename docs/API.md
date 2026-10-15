@@ -23,7 +23,7 @@ surface (100 operations) and the conventions.
 | GET | `/auth/status` | `{has_users, registration_open}` |
 | POST | `/auth/register` | `{email, password, full_name, organization_name?}` → first user becomes owner |
 | POST | `/auth/login` / `/auth/logout` | |
-| GET / PATCH | `/auth/me` | `PATCH {full_name?, preferences?}` (JARVIS prefs live under `preferences.jarvis`) |
+| GET / PATCH | `/auth/me` | `PATCH {full_name?, preferences?}` (assistant prefs live under `preferences.jarvis` — legacy key name, assistant default is AVINASH) |
 | POST | `/auth/change-password` | |
 | GET / DELETE | `/auth/sessions[/{id}]` | device sessions |
 | POST | `/auth/switch-organization/{org_id}` | |
@@ -70,7 +70,7 @@ target_duration_seconds?}` · `GET /projects/{id}/estimate` · `GET /projects/{i
 * `GET /dashboard`, `GET /activity?level&event_type&task_id&project_id&before&limit`,
   `GET /audit` (admin), `/notifications` (+`/read`), `GET /health`.
 
-## Assistant (JARVIS)
+## Assistant (AVINASH)
 
 * `POST /assistant/command {text, confirmed?, context{task_id?, session_id?, project_id?, page?,
   local_hour?}}` → `{reply, intent, ok, actions[], navigate?, confirm{title, detail, command}?,

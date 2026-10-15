@@ -1,4 +1,4 @@
-"""JARVIS console: command grammar, confirmations, task control, sessions, memory, briefing, telemetry."""
+"""AVINASH assistant console: command grammar, confirmations, task control, sessions, memory, briefing, telemetry."""
 
 from __future__ import annotations
 
@@ -67,15 +67,19 @@ async def test_help_status_and_briefing(client: ApiClient) -> None:
     response = await client.get("/api/assistant/briefing?local_hour=9")
     assert response.status_code == 200
     briefing = response.json()
-    assert briefing["text"].startswith("Good morning, sir. JARVIS online.")
+    assert briefing["text"].startswith("Good morning, sir. AVINASH online.")
     assert "status" in briefing
 
     response = await client.get("/api/assistant/capabilities")
-    assert response.status_code == 200 and any(t["tool"] == "stop_everything" for t in response.json()["tools"])
+    assert response.status_code == 200 and any(
+        t["tool"] == "stop_everything" for t in response.json()["tools"]
+    )
 
 
 async def test_memory_commands_and_endpoints(client: ApiClient) -> None:
-    response = await client.post("/api/assistant/command", json={"text": "remember that the brand colour is teal"})
+    response = await client.post(
+        "/api/assistant/command", json={"text": "remember that the brand colour is teal"}
+    )
     body = response.json()
     assert body["intent"] == "remember" and body["ok"], body
     assert body["data"]["fact"]["key"] == "brand colour" and body["data"]["fact"]["value"] == "teal"
@@ -93,7 +97,11 @@ async def test_memory_commands_and_endpoints(client: ApiClient) -> None:
     # Credentials are refused.
     response = await client.post("/api/assistant/memory", json={"value": "my password is hunter2"})
     assert response.status_code == 422, response.text
-    refused = (await client.post("/api/assistant/command", json={"text": "remember my api key is sk-abcdefgh12345678"})).json()
+    refused = (
+        await client.post(
+            "/api/assistant/command", json={"text": "remember my api key is sk-abcdefgh12345678"}
+        )
+    ).json()
     assert refused["ok"] is False and "refuses" in refused["reply"]
 
     forgotten = (await client.post("/api/assistant/command", json={"text": "forget brand colour"})).json()
@@ -106,7 +114,9 @@ async def test_memory_commands_and_endpoints(client: ApiClient) -> None:
     assert deleted.status_code == 204
     wipe = (await client.post("/api/assistant/command", json={"text": "forget everything"})).json()
     assert wipe["confirm"] and wipe["confirm"]["title"] == "CLEAR MEMORY"
-    wiped = (await client.post("/api/assistant/command", json={"text": "forget everything", "confirmed": True})).json()
+    wiped = (
+        await client.post("/api/assistant/command", json={"text": "forget everything", "confirmed": True})
+    ).json()
     assert wiped["ok"]
     assert (await client.get("/api/assistant/memory")).json() == []
 
@@ -116,13 +126,19 @@ async def test_task_control_via_commands(client: ApiClient, fake_sites) -> None:
     session = await client.create_session()
     project = await client.create_project(name="Sunrise film")
     task = await client.create_task(project["id"], session_id=session["id"], title="Sunrise render")
-    await client.wait_until(task["id"], lambda t: t["status"] == "running" and (t["progress"] or {}).get("current_scene_code"))
+    await client.wait_until(
+        task["id"], lambda t: t["status"] == "running" and (t["progress"] or {}).get("current_scene_code")
+    )
 
     paused = (await client.post("/api/assistant/command", json={"text": "pause task Sunrise"})).json()
     assert paused["intent"] == "task.pause" and paused["navigate"] == f"/tasks/{task['id']}", paused
     await client.wait_task(task["id"], {"paused"})
 
-    resumed = (await client.post("/api/assistant/command", json={"text": "resume", "context": {"task_id": task["id"]}})).json()
+    resumed = (
+        await client.post(
+            "/api/assistant/command", json={"text": "resume", "context": {"task_id": task["id"]}}
+        )
+    ).json()
     assert resumed["intent"] == "task.resume"
     await client.wait_task(task["id"], {"running"})
 
@@ -133,7 +149,9 @@ async def test_task_control_via_commands(client: ApiClient, fake_sites) -> None:
     stop = (await client.post("/api/assistant/command", json={"text": "stop everything"})).json()
     assert stop["confirm"]["title"] == "STOP EVERYTHING" and not stop["actions"]
     assert (await client.task(task["id"]))["status"] == "running"
-    stopped = (await client.post("/api/assistant/command", json={"text": "stop everything", "confirmed": True})).json()
+    stopped = (
+        await client.post("/api/assistant/command", json={"text": "stop everything", "confirmed": True})
+    ).json()
     assert stopped["actions"][0]["type"] == "task.stop_all"
     await client.wait_task(task["id"], {"cancelled"})
 
@@ -151,20 +169,53 @@ async def test_sessions_navigation_and_browser_tasks(client: ApiClient, fake_sit
     opened = (await client.post("/api/assistant/command", json={"text": "open Mock platform session"})).json()
     assert opened["intent"] == "open_session" and opened["data"]["session_id"] == session_id
 
-    nav = (await client.post("/api/assistant/command", json={"text": "go to https://mock.test/mock-platform/?login=1", "context": {"session_id": session_id}})).json()
+    nav = (
+        await client.post(
+            "/api/assistant/command",
+            json={
+                "text": "go to https://mock.test/mock-platform/?login=1",
+                "context": {"session_id": session_id},
+            },
+        )
+    ).json()
     assert nav["intent"] == "navigate" and nav["actions"][0]["url"].startswith("https://mock.test/")
 
     page = (await client.post("/api/assistant/command", json={"text": "open the activity log"})).json()
     assert page["navigate"] == "/activity"
 
-    queued = (await client.post("/api/assistant/command", json={"text": "run: open the generator and read the page title", "context": {"session_id": session_id}})).json()
+    queued = (
+        await client.post(
+            "/api/assistant/command",
+            json={
+                "text": "run: open the generator and read the page title",
+                "context": {"session_id": session_id},
+            },
+        )
+    ).json()
     assert queued["confirm"]["title"] == "QUEUE BROWSER TASK"
-    queued = (await client.post("/api/assistant/command", json={"text": "run: open the generator and read the page title", "context": {"session_id": session_id}, "confirmed": True})).json()
+    queued = (
+        await client.post(
+            "/api/assistant/command",
+            json={
+                "text": "run: open the generator and read the page title",
+                "context": {"session_id": session_id},
+                "confirmed": True,
+            },
+        )
+    ).json()
     assert queued["intent"] == "create_task" and queued["actions"][0]["type"] == "task.create", queued
     task = await client.task(queued["data"]["task_id"])
     assert task["kind"] == "browser_workflow" and task["browser_session_id"] == session_id
-    await client.wait_until(task["id"], lambda t: t["status"] in {"running", "completed", "failed", "needs_attention", "waiting_for_human"})
-    stop = (await client.post("/api/assistant/command", json={"text": "stop", "context": {"task_id": task["id"]}, "confirmed": True})).json()
+    await client.wait_until(
+        task["id"],
+        lambda t: t["status"] in {"running", "completed", "failed", "needs_attention", "waiting_for_human"},
+    )
+    stop = (
+        await client.post(
+            "/api/assistant/command",
+            json={"text": "stop", "context": {"task_id": task["id"]}, "confirmed": True},
+        )
+    ).json()
     assert stop["intent"] in {"task.stop", "task_control"}, stop
     await client.wait_task(task["id"], {"cancelled", "completed", "failed"})
 
@@ -176,7 +227,10 @@ async def test_personalisation_and_theme_commands(client: ApiClient) -> None:
     named = (await client.post("/api/assistant/command", json={"text": "call me Tony"})).json()
     assert named["client"] == {"action": "set_user_name", "value": "Tony"}
     renamed = (await client.post("/api/assistant/command", json={"text": "your name is Friday"})).json()
-    assert renamed["client"] == {"action": "set_assistant_name", "value": "Friday"} and "Tony" in renamed["reply"]
+    assert (
+        renamed["client"] == {"action": "set_assistant_name", "value": "Friday"}
+        and "Tony" in renamed["reply"]
+    )
     me = (await client.get("/api/auth/me")).json()
     assert me["user"]["preferences"]["jarvis"] == {"user_name": "Tony", "assistant_name": "Friday"}
     briefing = (await client.get("/api/assistant/briefing?local_hour=20")).json()
@@ -208,5 +262,13 @@ async def test_system_metrics_endpoint(client: ApiClient, anon: ApiClient) -> No
     response = await client.get("/api/assistant/system")
     assert response.status_code == 200
     frame = response.json()
-    assert {"cpu_percent", "memory", "network", "disk", "uptime_seconds", "process_uptime_seconds", "environment"} <= set(frame)
+    assert {
+        "cpu_percent",
+        "memory",
+        "network",
+        "disk",
+        "uptime_seconds",
+        "process_uptime_seconds",
+        "environment",
+    } <= set(frame)
     assert frame["environment"] == "test"

@@ -67,7 +67,7 @@ function NotificationsTab({ settings, admin }: { settings: OrgSettings; admin: b
     if (result === "granted") {
       window.localStorage.setItem("ba.browserNotify", "on");
       setEnabled(true);
-      new window.Notification("JARVIS online", { body: "Browser notifications enabled.", icon: "/favicon.svg" });
+      new window.Notification(`${useJarvis.getState().prefs.assistantName} online`, { body: "Browser notifications enabled.", icon: "/favicon.svg" });
     }
   };
   const orgPrefs = ((settings.organization.settings.notifications as Record<string, boolean> | undefined) ?? {});

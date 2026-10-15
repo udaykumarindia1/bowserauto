@@ -28,14 +28,26 @@ from app.storage.files import dir_size
 FileKind = Literal["generated", "asset", "screenshot"]
 
 
-async def list_generated_files(db: AsyncSession, org_id: uuid.UUID, *, project_id: uuid.UUID | None = None, task_id: uuid.UUID | None = None, limit: int = 200, offset: int = 0) -> tuple[list[GeneratedFile], int]:
+async def list_generated_files(
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    *,
+    project_id: uuid.UUID | None = None,
+    task_id: uuid.UUID | None = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> tuple[list[GeneratedFile], int]:
     query = select(GeneratedFile).where(GeneratedFile.organization_id == org_id)
     if project_id:
         query = query.where(GeneratedFile.project_id == project_id)
     if task_id:
         query = query.where(GeneratedFile.task_id == task_id)
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
-    rows = (await db.execute(query.order_by(GeneratedFile.created_at.desc()).offset(offset).limit(limit))).scalars().all()
+    rows = (
+        (await db.execute(query.order_by(GeneratedFile.created_at.desc()).offset(offset).limit(limit)))
+        .scalars()
+        .all()
+    )
     return list(rows), int(total)
 
 
@@ -53,7 +65,14 @@ async def get_screenshot(db: AsyncSession, org_id: uuid.UUID, screenshot_id: uui
     return row
 
 
-async def list_screenshots(db: AsyncSession, org_id: uuid.UUID, *, task_id: uuid.UUID | None = None, session_id: uuid.UUID | None = None, limit: int = 100) -> list[Screenshot]:
+async def list_screenshots(
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    *,
+    task_id: uuid.UUID | None = None,
+    session_id: uuid.UUID | None = None,
+    limit: int = 100,
+) -> list[Screenshot]:
     query = select(Screenshot).where(Screenshot.organization_id == org_id)
     if task_id:
         query = query.where(Screenshot.task_id == task_id)
@@ -63,9 +82,13 @@ async def list_screenshots(db: AsyncSession, org_id: uuid.UUID, *, task_id: uuid
     return list(rows)
 
 
-def signed_url(kind: FileKind, org_id: uuid.UUID, file_id: uuid.UUID, *, inline: bool = False, ttl: int | None = None) -> dict[str, Any]:
+def signed_url(
+    kind: FileKind, org_id: uuid.UUID, file_id: uuid.UUID, *, inline: bool = False, ttl: int | None = None
+) -> dict[str, Any]:
     settings = get_settings()
-    token = sign_payload({"k": kind, "o": str(org_id), "f": str(file_id), "i": 1 if inline else 0}, ttl_seconds=ttl)
+    token = sign_payload(
+        {"k": kind, "o": str(org_id), "f": str(file_id), "i": 1 if inline else 0}, ttl_seconds=ttl
+    )
     return {"url": f"/api/files/signed/{token}", "expires_in": ttl or settings.signed_url_ttl_seconds}
 
 
@@ -110,7 +133,15 @@ async def delete_generated_file(db: AsyncSession, row: GeneratedFile) -> None:
     await db.flush()
     if inside and path.exists():
         path.unlink(missing_ok=True)
-    await emit(db, "file.deleted", org_id, f"{filename} deleted", project_id=project_id, payload={"filename": filename}, commit=True)
+    await emit(
+        db,
+        "file.deleted",
+        org_id,
+        f"{filename} deleted",
+        project_id=project_id,
+        payload={"filename": filename},
+        commit=True,
+    )
 
 
 async def build_project_zip(
@@ -132,7 +163,13 @@ async def build_project_zip(
     if size > 4 * 1024 * 1024 * 1024:
         raise ValidationFailed("Project is too large to export as a single archive")
     manifest = {
-        "project": {"id": str(project.id), "name": project.name, "platform_key": project.platform_key, "visual_style": project.visual_style, "exported_at": datetime.now(UTC).isoformat()},
+        "project": {
+            "id": str(project.id),
+            "name": project.name,
+            "platform_key": project.platform_key,
+            "visual_style": project.visual_style,
+            "exported_at": datetime.now(UTC).isoformat(),
+        },
         "scenes": scenes or [],
     }
 

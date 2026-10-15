@@ -11,7 +11,7 @@
 * Suites are serial on purpose: the embedded worker launches (fake) browsers; running pytest in
   parallel with other heavy processes makes session start-up timeouts flaky.
 
-## Backend suite (77 tests)
+## Backend suite (78 tests)
 
 ```bash
 cd backend && source ../.venv/bin/activate
@@ -26,8 +26,8 @@ ruff check app tests && ruff format --check app tests
 | `test_auth.py` (10) | public status, register/login/logout, weak passwords, CSRF enforcement, error envelope + request id, **tenant isolation**, member roles, device sessions + revoke, change password, audit log |
 | `test_api.py` (9) | project CRUD + analysis, scene editing workflow (reorder/duplicate/delete/regenerate), assets/characters/export, generated files listing/deletion, templates/platforms/notifications/dashboard, settings limits + members, tenant isolation, CSRF/cookie protection, viewer read-only |
 | `test_queue.py` (8) | video task completes with verified files, retry with backoff then success, failure after retries → `needs_attention` → skip, pause/resume/stop, priority + reorder, **tasks survive worker restart**, STOP EVERYTHING, task limits |
-| `test_takeover.py` (5) | login wall → takeover → release, **verification challenge is never bypassed**, session lifecycle + limits, viewer cannot control browsers, WebSocket requires authentication |
-| `test_assistant.py` (31) | JARVIS command grammar, confirmations, memory (secret refusal), briefing, capabilities, role gating, navigation hints |
+| `test_takeover.py` (6) | login wall → takeover → release, **verification challenge is never bypassed**, session lifecycle + limits, viewer cannot control browsers, WebSocket requires authentication, worker evicts the longest-idle unused browser when its slots are full (and reports the wait otherwise) |
+| `test_assistant.py` (31) | AVINASH command grammar, confirmations, memory (secret refusal), briefing, capabilities, role gating, navigation hints |
 
 Useful filter for the noisy aiosqlite cancellation traces:
 

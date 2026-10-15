@@ -20,8 +20,17 @@ Writer = Annotated[object, Depends(require_role(OrgRole.member.value))]
 
 
 @router.get("", response_model=dict)
-async def list_files(auth: CurrentAuth, db: DB, project_id: uuid.UUID | None = None, task_id: uuid.UUID | None = None, limit: int = Query(default=200, le=1000), offset: int = 0) -> dict:
-    rows, total = await file_service.list_generated_files(db, auth.org_id, project_id=project_id, task_id=task_id, limit=limit, offset=offset)
+async def list_files(
+    auth: CurrentAuth,
+    db: DB,
+    project_id: uuid.UUID | None = None,
+    task_id: uuid.UUID | None = None,
+    limit: int = Query(default=200, le=1000),
+    offset: int = 0,
+) -> dict:
+    rows, total = await file_service.list_generated_files(
+        db, auth.org_id, project_id=project_id, task_id=task_id, limit=limit, offset=offset
+    )
     items = []
     for row in rows:
         data = GeneratedFileOut.model_validate(row).model_dump(by_alias=True)
@@ -37,7 +46,16 @@ async def download_signed(token: str, db: DB) -> FileResponse:
     if not path.exists():
         raise NotFoundError("File is missing on disk")
     disposition = "inline" if inline else "attachment"
-    return FileResponse(path, media_type=mime, filename=None if inline else filename, headers={"Content-Disposition": f'{disposition}; filename="{filename}"', "Cache-Control": "private, max-age=600", "X-Content-Type-Options": "nosniff"})
+    return FileResponse(
+        path,
+        media_type=mime,
+        filename=None if inline else filename,
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "private, max-age=600",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/{file_id}", response_model=dict)
@@ -58,6 +76,15 @@ async def file_url(file_id: uuid.UUID, auth: CurrentAuth, db: DB, inline: bool =
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_file(file_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer) -> Response:
     row = await file_service.get_generated_file(db, auth.org_id, file_id)
-    await audit(db, "file.deleted", request=request, user_id=auth.user_id, org_id=auth.org_id, resource_type="generated_file", resource_id=row.id, data={"filename": row.filename})
+    await audit(
+        db,
+        "file.deleted",
+        request=request,
+        user_id=auth.user_id,
+        org_id=auth.org_id,
+        resource_type="generated_file",
+        resource_id=row.id,
+        data={"filename": row.filename},
+    )
     await file_service.delete_generated_file(db, row)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

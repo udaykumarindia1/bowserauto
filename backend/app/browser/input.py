@@ -36,7 +36,9 @@ class InputController:
     def _coords(self, event: dict[str, Any]) -> tuple[float, float]:
         width, height = self._viewport()
         if "nx" in event and "ny" in event:
-            return max(0.0, min(1.0, float(event["nx"]))) * width, max(0.0, min(1.0, float(event["ny"]))) * height
+            return max(0.0, min(1.0, float(event["nx"]))) * width, max(
+                0.0, min(1.0, float(event["ny"]))
+            ) * height
         return float(event.get("x", 0)), float(event.get("y", 0))
 
     async def handle(self, event: dict[str, Any]) -> None:
@@ -49,16 +51,27 @@ class InputController:
             elif kind == "mousedown":
                 x, y = self._coords(event)
                 await page.mouse.move(x, y)
-                await page.mouse.down(button=BUTTONS.get(event.get("button", 0), "left"), click_count=int(event.get("click_count", 1)))
+                await page.mouse.down(
+                    button=BUTTONS.get(event.get("button", 0), "left"),
+                    click_count=int(event.get("click_count", 1)),
+                )
                 self._mouse_down = True
             elif kind == "mouseup":
                 x, y = self._coords(event)
                 await page.mouse.move(x, y)
-                await page.mouse.up(button=BUTTONS.get(event.get("button", 0), "left"), click_count=int(event.get("click_count", 1)))
+                await page.mouse.up(
+                    button=BUTTONS.get(event.get("button", 0), "left"),
+                    click_count=int(event.get("click_count", 1)),
+                )
                 self._mouse_down = False
             elif kind == "click":
                 x, y = self._coords(event)
-                await page.mouse.click(x, y, button=BUTTONS.get(event.get("button", 0), "left"), click_count=int(event.get("click_count", 1)))
+                await page.mouse.click(
+                    x,
+                    y,
+                    button=BUTTONS.get(event.get("button", 0), "left"),
+                    click_count=int(event.get("click_count", 1)),
+                )
             elif kind == "wheel":
                 x, y = self._coords(event)
                 await page.mouse.move(x, y)

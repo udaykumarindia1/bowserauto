@@ -26,7 +26,9 @@ async def list_platforms(auth: CurrentAuth) -> list[PlatformOut]:
     enabled = _enabled_map(auth.organization)
     out = []
     for info in list_platform_info():
-        out.append(PlatformOut(**{**info, "adapter_available": True, "enabled": enabled.get(info["key"], True)}))
+        out.append(
+            PlatformOut(**{**info, "adapter_available": True, "enabled": enabled.get(info["key"], True)})
+        )
     return out
 
 
@@ -37,7 +39,14 @@ async def platform_detail(key: str, auth: CurrentAuth) -> dict:
         raise NotFoundError("Unknown platform")
     info = cls.info()
     adapter = cls(None)
-    return {**info, "adapter_available": True, "enabled": _enabled_map(auth.organization).get(key, True), "start_url": adapter.start_url(), "selectors": {k: v for k, v in cls.selectors.items()}, "login_hint": await adapter.login_hint()}
+    return {
+        **info,
+        "adapter_available": True,
+        "enabled": _enabled_map(auth.organization).get(key, True),
+        "start_url": adapter.start_url(),
+        "selectors": {k: v for k, v in cls.selectors.items()},
+        "login_hint": await adapter.login_hint(),
+    }
 
 
 class PlatformEnabledIn(BaseModel):
@@ -45,7 +54,13 @@ class PlatformEnabledIn(BaseModel):
 
 
 @router.post("/{key}/enabled", response_model=PlatformOut)
-async def set_enabled(key: str, payload: PlatformEnabledIn, auth: CurrentAuth, db: DB, _: Annotated[object, Depends(require_role(OrgRole.admin.value))]) -> PlatformOut:
+async def set_enabled(
+    key: str,
+    payload: PlatformEnabledIn,
+    auth: CurrentAuth,
+    db: DB,
+    _: Annotated[object, Depends(require_role(OrgRole.admin.value))],
+) -> PlatformOut:
     enabled = payload.enabled
     cls = get_adapter_class(key)
     if cls is None:

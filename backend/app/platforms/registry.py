@@ -27,7 +27,12 @@ def _discover() -> dict[str, type[PlatformAdapter]]:
             logger.error("Failed to import platform adapter %s: %s", module_info.name, exc)
             continue
         for attr in vars(module).values():
-            if isinstance(attr, type) and issubclass(attr, PlatformAdapter) and attr is not PlatformAdapter and getattr(attr, "key", "base") != "base":
+            if (
+                isinstance(attr, type)
+                and issubclass(attr, PlatformAdapter)
+                and attr is not PlatformAdapter
+                and getattr(attr, "key", "base") != "base"
+            ):
                 found[attr.key] = attr
     return found
 
@@ -56,7 +61,21 @@ def create_adapter(key: str, config: dict[str, Any] | None = None) -> PlatformAd
 
 
 def list_platform_info() -> list[dict[str, Any]]:
-    order = ["mock", "generic", "google_flow", "runway", "kling", "luma", "hailuo", "pika", "pixverse", "vidu", "chatgpt", "gemini", "arena"]
+    order = [
+        "mock",
+        "generic",
+        "google_flow",
+        "runway",
+        "kling",
+        "luma",
+        "hailuo",
+        "pika",
+        "pixverse",
+        "vidu",
+        "chatgpt",
+        "gemini",
+        "arena",
+    ]
     registry = get_registry()
     keys = [k for k in order if k in registry] + sorted(k for k in registry if k not in order)
     return [registry[k].info() for k in keys]

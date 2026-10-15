@@ -36,7 +36,14 @@ class LLMClient(Protocol):
     name: str
     model: str
 
-    async def complete(self, messages: list[LLMMessage], *, json_mode: bool = False, max_tokens: int = 2048, temperature: float = 0.2) -> LLMResponse: ...
+    async def complete(
+        self,
+        messages: list[LLMMessage],
+        *,
+        json_mode: bool = False,
+        max_tokens: int = 2048,
+        temperature: float = 0.2,
+    ) -> LLMResponse: ...
 
 
 class LLMUnavailable(Exception):
@@ -69,23 +76,42 @@ class OpenAICompatibleClient:
 
     name = "openai"
 
-    def __init__(self, api_key: str | None, model: str, base_url: str | None = None, timeout: int = 90) -> None:
+    def __init__(
+        self, api_key: str | None, model: str, base_url: str | None = None, timeout: int = 90
+    ) -> None:
         self.api_key = api_key
         self.model = model
         self.base_url = (base_url or "https://api.openai.com/v1").rstrip("/")
         self.timeout = timeout
 
-    async def complete(self, messages: list[LLMMessage], *, json_mode: bool = False, max_tokens: int = 2048, temperature: float = 0.2) -> LLMResponse:
+    async def complete(
+        self,
+        messages: list[LLMMessage],
+        *,
+        json_mode: bool = False,
+        max_tokens: int = 2048,
+        temperature: float = 0.2,
+    ) -> LLMResponse:
         payload_messages = []
         for m in messages:
             if m.images:
                 content: list[dict[str, Any]] = [{"type": "text", "text": m.content}]
                 for img in m.images:
-                    content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img}", "detail": "low"}})
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{img}", "detail": "low"},
+                        }
+                    )
                 payload_messages.append({"role": m.role, "content": content})
             else:
                 payload_messages.append({"role": m.role, "content": m.content})
-        body: dict[str, Any] = {"model": self.model, "messages": payload_messages, "max_tokens": max_tokens, "temperature": temperature}
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": payload_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         headers = {"Content-Type": "application/json"}
@@ -98,7 +124,11 @@ class OpenAICompatibleClient:
         data = response.json()
         text = data["choices"][0]["message"]["content"] or ""
         usage = data.get("usage") or {}
-        return LLMResponse(text=text, model=data.get("model", self.model), usage={k: v for k, v in usage.items() if isinstance(v, int)})
+        return LLMResponse(
+            text=text,
+            model=data.get("model", self.model),
+            usage={k: v for k, v in usage.items() if isinstance(v, int)},
+        )
 
 
 class AnthropicClient:
@@ -110,7 +140,14 @@ class AnthropicClient:
         self.base_url = (base_url or "https://api.anthropic.com").rstrip("/")
         self.timeout = timeout
 
-    async def complete(self, messages: list[LLMMessage], *, json_mode: bool = False, max_tokens: int = 2048, temperature: float = 0.2) -> LLMResponse:
+    async def complete(
+        self,
+        messages: list[LLMMessage],
+        *,
+        json_mode: bool = False,
+        max_tokens: int = 2048,
+        temperature: float = 0.2,
+    ) -> LLMResponse:
         system_parts = [m.content for m in messages if m.role == "system"]
         converted = []
         for m in messages:
@@ -119,24 +156,44 @@ class AnthropicClient:
             if m.images:
                 content: list[dict[str, Any]] = [{"type": "text", "text": m.content}]
                 for img in m.images:
-                    content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img}})
+                    content.append(
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/jpeg", "data": img},
+                        }
+                    )
                 converted.append({"role": m.role, "content": content})
             else:
                 converted.append({"role": m.role, "content": m.content})
         if json_mode:
             system_parts.append("Respond with a single valid JSON document and nothing else.")
-        body: dict[str, Any] = {"model": self.model, "messages": converted, "max_tokens": max_tokens, "temperature": temperature}
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": converted,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
         if system_parts:
             body["system"] = "\n\n".join(system_parts)
-        headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(f"{self.base_url}/v1/messages", json=body, headers=headers)
         if response.status_code >= 400:
             raise LLMUnavailable(f"LLM request failed ({response.status_code}): {response.text[:300]}")
         data = response.json()
-        text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+        text = "".join(
+            block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"
+        )
         usage = data.get("usage") or {}
-        return LLMResponse(text=text, model=data.get("model", self.model), usage={k: v for k, v in usage.items() if isinstance(v, int)})
+        return LLMResponse(
+            text=text,
+            model=data.get("model", self.model),
+            usage={k: v for k, v in usage.items() if isinstance(v, int)},
+        )
 
 
 def build_llm_client(overrides: dict[str, Any] | None = None) -> LLMClient | None:
@@ -156,7 +213,9 @@ def build_llm_client(overrides: dict[str, Any] | None = None) -> LLMClient | Non
     if provider == "anthropic":
         if not api_key:
             return None
-        return AnthropicClient(api_key, model or "claude-3-5-sonnet-latest", base_url, settings.llm_timeout_seconds)
+        return AnthropicClient(
+            api_key, model or "claude-3-5-sonnet-latest", base_url, settings.llm_timeout_seconds
+        )
     return None
 
 
@@ -167,5 +226,7 @@ def llm_status(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         "configured": client is not None,
         "provider": client.name if client else "none",
         "model": client.model if client else None,
-        "source": "organization" if overrides and overrides.get("provider") not in (None, "inherit") else ("environment" if settings.llm_provider != "none" else "none"),
+        "source": "organization"
+        if overrides and overrides.get("provider") not in (None, "inherit")
+        else ("environment" if settings.llm_provider != "none" else "none"),
     }

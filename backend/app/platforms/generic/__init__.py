@@ -25,7 +25,12 @@ class GenericAdapter(PlatformAdapter):
     requires_login = False
     verified = True
     notes = "Best results with an LLM configured in Settings. Without one, a rule-based fallback handles common prompt → generate → download layouts."
-    capabilities: ClassVar[dict[str, Any]] = {"max_clip_seconds": 10, "aspect_ratios": ["16:9", "9:16", "1:1"], "reference_images": True, "negative_prompt": False}
+    capabilities: ClassVar[dict[str, Any]] = {
+        "max_clip_seconds": 10,
+        "aspect_ratios": ["16:9", "9:16", "1:1"],
+        "reference_images": True,
+        "negative_prompt": False,
+    }
     selectors: ClassVar[dict[str, Any]] = {
         "prompt_input": {
             "any": [
@@ -35,9 +40,25 @@ class GenericAdapter(PlatformAdapter):
                 {"css": "[contenteditable='true']"},
             ]
         },
-        "upload": {"any": [{"css": "input[type=file]"}, {"role": "button", "name": "/upload|add image|reference|attach/i"}]},
-        "generate_button": {"any": [{"role": "button", "name": "/^(generate|create|run|render|make video|submit|go)\\b/i"}, {"css": "button[type=submit]"}]},
-        "download_button": {"any": [{"role": "link", "name": "/download/i"}, {"role": "button", "name": "/download/i"}, {"css": "a[download]"}]},
+        "upload": {
+            "any": [
+                {"css": "input[type=file]"},
+                {"role": "button", "name": "/upload|add image|reference|attach/i"},
+            ]
+        },
+        "generate_button": {
+            "any": [
+                {"role": "button", "name": "/^(generate|create|run|render|make video|submit|go)\\b/i"},
+                {"css": "button[type=submit]"},
+            ]
+        },
+        "download_button": {
+            "any": [
+                {"role": "link", "name": "/download/i"},
+                {"role": "button", "name": "/download/i"},
+                {"css": "a[download]"},
+            ]
+        },
         "result_video": {"css": "video[src], video source[src]"},
     }
 
@@ -58,9 +79,15 @@ class GenericAdapter(PlatformAdapter):
                 await ctx.driver.wait_for_load(state="domcontentloaded")
         elif (await ctx.driver.url()) in ("", "about:blank"):
             if ctx.run_agent:
-                await ctx.run_agent("Navigate to the web platform that should be used for generation as described in the task instructions.", {"instructions": ctx.options.get("instructions", "")})
+                await ctx.run_agent(
+                    "Navigate to the web platform that should be used for generation as described in the task instructions.",
+                    {"instructions": ctx.options.get("instructions", "")},
+                )
             else:
-                raise ElementNotFound("No platform URL configured for the generic adapter. Set a start URL on the browser session or project.", retryable=False)
+                raise ElementNotFound(
+                    "No platform URL configured for the generic adapter. Set a start URL on the browser session or project.",
+                    retryable=False,
+                )
         await self.check_blockers(ctx)
 
     async def generate(self, ctx: AdapterContext, target_dir: Path):  # type: ignore[override]
@@ -89,9 +116,24 @@ class GenericAdapter(PlatformAdapter):
             "(6) download the generated video with browser.download; (7) finish with task.complete and include the download path. "
             "If the site asks you to log in, solve a CAPTCHA or verify your identity, call task.needs_human instead of attempting it."
         )
-        info = await ctx.run_agent(goal, {"prompt": ctx.scene.prompt, "duration_seconds": ctx.scene.duration_seconds, "aspect_ratio": ctx.scene.aspect_ratio, "files": [str(f) for f in ctx.scene.reference_files]})
+        info = await ctx.run_agent(
+            goal,
+            {
+                "prompt": ctx.scene.prompt,
+                "duration_seconds": ctx.scene.duration_seconds,
+                "aspect_ratio": ctx.scene.aspect_ratio,
+                "files": [str(f) for f in ctx.scene.reference_files],
+            },
+        )
         path = info.get("download_path")
         if not path or not Path(path).exists():
             raise DownloadFailed("The agent finished without producing a downloaded file")
-        download = DownloadResult(path=Path(path), suggested_filename=Path(path).name, size_bytes=Path(path).stat().st_size)
-        return GenerationOutcome(download=download, output_kind=self.output_kind, generation_seconds=time.monotonic() - started, details={"mode": "agent"})
+        download = DownloadResult(
+            path=Path(path), suggested_filename=Path(path).name, size_bytes=Path(path).stat().st_size
+        )
+        return GenerationOutcome(
+            download=download,
+            output_kind=self.output_kind,
+            generation_seconds=time.monotonic() - started,
+            details={"mode": "agent"},
+        )

@@ -50,7 +50,9 @@ class Settings(BaseSettings):
     csrf_cookie_name: str = "ba_csrf"
     cookie_secure: bool | None = None  # None => derived from environment
     cookie_domain: str | None = None
-    allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
+    )
     trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
     rate_limit_per_minute: int = 300
     auth_rate_limit_per_minute: int = 20
@@ -65,18 +67,39 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------- redis/queue
     redis_url: str | None = None
     embedded_worker: bool | None = None  # None => True when redis is not configured
-    worker_capabilities: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["browser", "general"])
+    worker_capabilities: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["browser", "general"]
+    )
     worker_poll_interval_seconds: float = 1.0
     worker_heartbeat_seconds: float = 5.0
     worker_stale_after_seconds: int = 45
     max_concurrent_tasks_per_worker: int = 1
+    # Open browsers a worker keeps alive for user sessions; 0 = auto (max_concurrent_tasks_per_worker + 2,
+    # at least 2). The longest-idle unused browser is evicted (profile kept) when a new session needs a slot.
+    max_open_sessions_per_worker: int = 0
+    # A browser under human control is only evicted for a new session after this much inactivity.
+    session_interactive_idle_seconds: int = 300
 
     # ------------------------------------------------------------------ storage
     data_dir: Path = Path("./data")
     max_upload_size_mb: int = 50
     max_generated_file_size_mb: int = 2048
     allowed_upload_extensions: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".mov", ".webm", ".txt", ".md", ".json", ".wav", ".mp3"]
+        default_factory=lambda: [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp",
+            ".gif",
+            ".mp4",
+            ".mov",
+            ".webm",
+            ".txt",
+            ".md",
+            ".json",
+            ".wav",
+            ".mp3",
+        ]
     )
 
     # ------------------------------------------------------------------ browser
@@ -124,7 +147,14 @@ class Settings(BaseSettings):
     notification_webhook_url: str | None = None
 
     # ------------------------------------------------------------------ helpers
-    @field_validator("allowed_origins", "trusted_hosts", "worker_capabilities", "browser_extra_args", "allowed_upload_extensions", mode="before")
+    @field_validator(
+        "allowed_origins",
+        "trusted_hosts",
+        "worker_capabilities",
+        "browser_extra_args",
+        "allowed_upload_extensions",
+        mode="before",
+    )
     @classmethod
     def _split_csv(cls, value):  # noqa: ANN001
         """Accept ``a,b,c`` as well as a JSON list in environment variables."""
@@ -147,7 +177,9 @@ class Settings(BaseSettings):
             if self.secret_key.startswith("dev-insecure") or len(self.secret_key) < 32:
                 problems.append("SECRET_KEY must be set to a random value of at least 32 characters")
             if not self.encryption_key:
-                problems.append("ENCRYPTION_KEY must be set (generate one with `python -m app.core.security gen-key`)")
+                problems.append(
+                    "ENCRYPTION_KEY must be set (generate one with `python -m app.core.security gen-key`)"
+                )
             if self.database_url.startswith("sqlite"):
                 problems.append("DATABASE_URL must point to PostgreSQL in production")
             if problems:
@@ -221,7 +253,7 @@ class Settings(BaseSettings):
         elif url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         if url.startswith("sqlite+aiosqlite:///./"):
-            rel = url[len("sqlite+aiosqlite:///./"):]
+            rel = url[len("sqlite+aiosqlite:///./") :]
             url = f"sqlite+aiosqlite:///{(BACKEND_DIR / rel).resolve()}"
         return url
 
@@ -241,7 +273,13 @@ def reset_settings_cache() -> None:
 
 def ensure_directories(settings: Settings | None = None) -> None:
     settings = settings or get_settings()
-    for path in (settings.resolved_data_dir, settings.projects_dir, settings.profiles_dir, settings.screenshots_dir, settings.tmp_dir):
+    for path in (
+        settings.resolved_data_dir,
+        settings.projects_dir,
+        settings.profiles_dir,
+        settings.screenshots_dir,
+        settings.tmp_dir,
+    ):
         path.mkdir(parents=True, exist_ok=True)
     # Browser profiles contain authenticated cookies; keep them private to the service user.
     try:

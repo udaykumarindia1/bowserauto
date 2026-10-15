@@ -85,7 +85,11 @@ def _memory() -> dict[str, Any]:
     total = fields.get("MemTotal", 0)
     available = fields.get("MemAvailable", fields.get("MemFree", 0))
     used = max(0, total - available)
-    return {"total_bytes": total, "used_bytes": used, "percent": round(100.0 * used / total, 1) if total else None}
+    return {
+        "total_bytes": total,
+        "used_bytes": used,
+        "percent": round(100.0 * used / total, 1) if total else None,
+    }
 
 
 def _network() -> dict[str, Any]:
@@ -106,7 +110,10 @@ def _network() -> dict[str, Any]:
     now = time.time()
     if _last_net is not None and now > _last_net.ts:
         dt = now - _last_net.ts
-        _net_rate = {"rx_bps": max(0.0, (rx - _last_net.rx) / dt), "tx_bps": max(0.0, (tx - _last_net.tx) / dt)}
+        _net_rate = {
+            "rx_bps": max(0.0, (rx - _last_net.rx) / dt),
+            "tx_bps": max(0.0, (tx - _last_net.tx) / dt),
+        }
     _last_net = _NetSample(rx=rx, tx=tx, ts=now)
     return {k: round(v, 1) for k, v in _net_rate.items()}
 
@@ -153,7 +160,11 @@ def _disk(path: Path) -> dict[str, Any]:
         usage = shutil.disk_usage(path if path.exists() else Path.cwd())
     except OSError:
         return {"total_bytes": None, "used_bytes": None, "percent": None}
-    return {"total_bytes": usage.total, "used_bytes": usage.used, "percent": round(100.0 * usage.used / usage.total, 1) if usage.total else None}
+    return {
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
+        "percent": round(100.0 * usage.used / usage.total, 1) if usage.total else None,
+    }
 
 
 def system_metrics(storage_path: Path | None = None) -> dict[str, Any]:

@@ -49,6 +49,22 @@ async def list_activity(
 
 
 @router.get("/audit", response_model=list[AuditLogOut])
-async def list_audit(auth: CurrentAuth, db: DB, _: Annotated[object, Depends(require_role(OrgRole.admin.value))], limit: int = Query(default=100, le=1000)) -> list[AuditLogOut]:
-    rows = (await db.execute(select(AuditLog).where(AuditLog.organization_id == auth.org_id).order_by(AuditLog.created_at.desc()).limit(limit))).scalars().all()
+async def list_audit(
+    auth: CurrentAuth,
+    db: DB,
+    _: Annotated[object, Depends(require_role(OrgRole.admin.value))],
+    limit: int = Query(default=100, le=1000),
+) -> list[AuditLogOut]:
+    rows = (
+        (
+            await db.execute(
+                select(AuditLog)
+                .where(AuditLog.organization_id == auth.org_id)
+                .order_by(AuditLog.created_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [AuditLogOut.model_validate(r) for r in rows]

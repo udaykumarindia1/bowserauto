@@ -17,7 +17,7 @@ for development only). `APP_ENV` selects the profile:
 Key variables (full list with comments: `backend/.env.example`, compose: `.env.example`):
 `APP_ENV, SECRET_KEY, ENCRYPTION_KEY, DATABASE_URL, REDIS_URL, PUBLIC_BASE_URL, ALLOWED_ORIGINS,
 TRUSTED_HOSTS, COOKIE_SECURE, ALLOW_REGISTRATION, DATA_DIR, WORKER_CAPABILITIES,
-MAX_CONCURRENT_TASKS_PER_WORKER, BROWSER_HEADLESS, CHROMIUM_EXECUTABLE_PATH, STREAM_MAX_FPS,
+MAX_CONCURRENT_TASKS_PER_WORKER, MAX_OPEN_SESSIONS_PER_WORKER, SESSION_INTERACTIVE_IDLE_SECONDS, BROWSER_HEADLESS, CHROMIUM_EXECUTABLE_PATH, STREAM_MAX_FPS,
 STREAM_QUALITY, MOCK_PLATFORM_URL, LLM_PROVIDER/LLM_API_KEY/LLM_MODEL/LLM_BASE_URL, SMTP_*,
 TELEGRAM_*, NOTIFICATION_WEBHOOK_URL, MAX_TASK_DURATION_SECONDS, MAX_RETRIES_LIMIT,
 MAX_SCENES_PER_TASK, MAX_BROWSER_SESSIONS_PER_ORG, MAX_GENERATED_FILE_SIZE_MB,
@@ -89,6 +89,7 @@ Migrations are plain Alembic (`backend/alembic`). Create new ones with
 | Symptom | Check |
 | --- | --- |
 | Task stays `queued` | a worker with the `browser` capability is running and healthy; `docker compose logs worker browser-worker`; `GET /api/health` shows the bus |
+| Session shows "Waiting for a free browser slot" | the browser worker already keeps `MAX_OPEN_SESSIONS_PER_WORKER` browsers open for humans/tasks; close or release another session, raise the cap (≈ 500 MB RAM per browser) or scale `browser-worker` |
 | Live viewer "Waiting for first frame" | the session is `ready`/`in_use` on a live worker; WebSocket upgrade allowed by your proxy (`Upgrade`/`Connection` headers) |
 | `needs_attention: Login required` | open the task, **Take over**, log into the platform, **Return control**; then **Mark logged in** on the session |
 | Downloads fail with size errors | raise `MAX_GENERATED_FILE_SIZE_MB` (org limit in Settings has to fit under the server ceiling) |

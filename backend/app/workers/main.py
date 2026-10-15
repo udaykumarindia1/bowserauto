@@ -40,7 +40,12 @@ from app.workers.session_host import SessionHost
 
 logger = logging.getLogger(__name__)
 
-RUNNING_STATUSES = [TaskStatus.running.value, TaskStatus.paused.value, TaskStatus.waiting_for_human.value, TaskStatus.needs_attention.value]
+RUNNING_STATUSES = [
+    TaskStatus.running.value,
+    TaskStatus.paused.value,
+    TaskStatus.waiting_for_human.value,
+    TaskStatus.needs_attention.value,
+]
 
 
 @dataclass
@@ -55,7 +60,9 @@ class TaskRun:
 
 
 class Worker:
-    def __init__(self, *, worker_id: str | None = None, capabilities: list[str] | None = None, embedded: bool = False) -> None:
+    def __init__(
+        self, *, worker_id: str | None = None, capabilities: list[str] | None = None, embedded: bool = False
+    ) -> None:
         self.settings = get_settings()
         self.id = worker_id or f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
         self.capabilities = capabilities or list(self.settings.worker_capabilities)
@@ -79,7 +86,12 @@ class Worker:
         self._subscription = bus.subscribe(WORKER_WAKEUP, maxsize=1000)
         self._wake_task = asyncio.create_task(self._wake_loop(), name="worker-wake")
         self._loop_task = asyncio.create_task(self.run_forever(), name="worker-loop")
-        logger.info("Worker %s started (capabilities=%s, embedded=%s)", self.id, ",".join(self.capabilities), self.embedded)
+        logger.info(
+            "Worker %s started (capabilities=%s, embedded=%s)",
+            self.id,
+            ",".join(self.capabilities),
+            self.embedded,
+        )
 
     async def stop(self) -> None:
         self._stopping = True
@@ -167,7 +179,9 @@ class Worker:
                     hb = session.last_heartbeat_at
                     if hb is not None and hb.tzinfo is None:
                         hb = hb.replace(tzinfo=UTC)
-                    hosted_elsewhere = session.worker_id and session.worker_id != self.id and hb is not None and hb > stale
+                    hosted_elsewhere = (
+                        session.worker_id and session.worker_id != self.id and hb is not None and hb > stale
+                    )
                     if hosted_elsewhere:
                         continue
                     if session.locked_by_task_id and session.locked_by_task_id != task_id:
@@ -175,15 +189,35 @@ class Worker:
                         if other is not None and other.status in RUNNING_STATUSES:
                             continue
                 if org_id not in org_running:
-                    rows = (await db.execute(select(Task.id).where(Task.organization_id == org_id, Task.status.in_(RUNNING_STATUSES), Task.worker_id.isnot(None)))).scalars().all()
+                    rows = (
+                        (
+                            await db.execute(
+                                select(Task.id).where(
+                                    Task.organization_id == org_id,
+                                    Task.status.in_(RUNNING_STATUSES),
+                                    Task.worker_id.isnot(None),
+                                )
+                            )
+                        )
+                        .scalars()
+                        .all()
+                    )
                     org_running[org_id] = len(rows)
                 org = await db.get(Organization, org_id)
                 if org_running[org_id] >= effective_limits(org)["max_concurrent_tasks"]:
                     continue
                 result = await db.execute(
                     update(Task)
-                    .where(Task.id == task_id, Task.status == TaskStatus.queued.value, Task.worker_id.is_(None))
-                    .values(worker_id=self.id, status=TaskStatus.running.value, locked_at=datetime.now(UTC), heartbeat_at=datetime.now(UTC), control=TaskControl.none.value)
+                    .where(
+                        Task.id == task_id, Task.status == TaskStatus.queued.value, Task.worker_id.is_(None)
+                    )
+                    .values(
+                        worker_id=self.id,
+                        status=TaskStatus.running.value,
+                        locked_at=datetime.now(UTC),
+                        heartbeat_at=datetime.now(UTC),
+                        control=TaskControl.none.value,
+                    )
                 )
                 if result.rowcount == 1:
                     return task_id
@@ -198,7 +232,14 @@ class Worker:
         token = ControlToken()
         executor = TaskExecutor(self, task_id, token)
         future = asyncio.create_task(executor.run(), name=f"task-{task_id}")
-        self.runs[task_id] = TaskRun(task_id=task_id, org_id=org_id, token=token, executor=executor, future=future, session_id=session_id)
+        self.runs[task_id] = TaskRun(
+            task_id=task_id,
+            org_id=org_id,
+            token=token,
+            executor=executor,
+            future=future,
+            session_id=session_id,
+        )
         logger.info("Claimed task %s", task_id)
 
     async def _reap_finished(self) -> None:
@@ -220,7 +261,9 @@ class Worker:
         if not self.runs:
             return
         async with session_scope() as db:
-            query = select(Task.id, Task.control, Task.status).where(Task.worker_id == self.id, Task.control != TaskControl.none.value)
+            query = select(Task.id, Task.control, Task.status).where(
+                Task.worker_id == self.id, Task.control != TaskControl.none.value
+            )
             if only is not None:
                 query = query.where(Task.id == only)
             rows = (await db.execute(query)).all()
@@ -229,7 +272,11 @@ class Worker:
             if run is None:
                 continue
             async with session_scope() as db:
-                result = await db.execute(update(Task).where(Task.id == task_id, Task.control == control).values(control=TaskControl.none.value))
+                result = await db.execute(
+                    update(Task)
+                    .where(Task.id == task_id, Task.control == control)
+                    .values(control=TaskControl.none.value)
+                )
             if result.rowcount != 1:
                 continue  # somebody else consumed it
             try:
@@ -246,8 +293,19 @@ class Worker:
         if control == TaskControl.pause.value:
             token.request_pause("paused by user")
             async with session_scope() as db:
-                await db.execute(update(Task).where(Task.id == run.task_id).values(status=TaskStatus.paused.value, paused_at=now, current_action="Paused"))
-                await emit(db, "task.paused", run.org_id, "Task paused", task_id=run.task_id, payload={"status": "paused"})
+                await db.execute(
+                    update(Task)
+                    .where(Task.id == run.task_id)
+                    .values(status=TaskStatus.paused.value, paused_at=now, current_action="Paused")
+                )
+                await emit(
+                    db,
+                    "task.paused",
+                    run.org_id,
+                    "Task paused",
+                    task_id=run.task_id,
+                    payload={"status": "paused"},
+                )
             if host:
                 await host.set_action("Paused", kind="control")
         elif control == TaskControl.resume.value:
@@ -267,8 +325,25 @@ class Worker:
                 await host.set_interactive(True)
                 await host.set_action("Human has control", kind="human")
             async with session_scope() as db:
-                await db.execute(update(Task).where(Task.id == run.task_id).values(status=TaskStatus.waiting_for_human.value, human_control=True, paused_at=now, current_action="Human has control of the browser"))
-                await emit(db, "human.takeover", run.org_id, "You have control of the browser. Click 'Return control to AI' when done.", task_id=run.task_id, session_id=run.session_id, payload={"status": "waiting_for_human", "human_control": True})
+                await db.execute(
+                    update(Task)
+                    .where(Task.id == run.task_id)
+                    .values(
+                        status=TaskStatus.waiting_for_human.value,
+                        human_control=True,
+                        paused_at=now,
+                        current_action="Human has control of the browser",
+                    )
+                )
+                await emit(
+                    db,
+                    "human.takeover",
+                    run.org_id,
+                    "You have control of the browser. Click 'Return control to AI' when done.",
+                    task_id=run.task_id,
+                    session_id=run.session_id,
+                    payload={"status": "waiting_for_human", "human_control": True},
+                )
         elif control == TaskControl.release.value:
             if host:
                 await host.set_interactive(False)
@@ -290,11 +365,28 @@ class Worker:
         async with session_scope() as db:
             result = await db.execute(
                 update(Task)
-                .where(Task.id == run.task_id, Task.status.in_([TaskStatus.paused.value, TaskStatus.waiting_for_human.value, TaskStatus.needs_attention.value]))
+                .where(
+                    Task.id == run.task_id,
+                    Task.status.in_(
+                        [
+                            TaskStatus.paused.value,
+                            TaskStatus.waiting_for_human.value,
+                            TaskStatus.needs_attention.value,
+                        ]
+                    ),
+                )
                 .values(status=TaskStatus.running.value, human_control=False, paused_at=None)
             )
             if result.rowcount:
-                await emit(db, "task.resumed", run.org_id, message, task_id=run.task_id, session_id=run.session_id, payload={"status": "running"})
+                await emit(
+                    db,
+                    "task.resumed",
+                    run.org_id,
+                    message,
+                    task_id=run.task_id,
+                    session_id=run.session_id,
+                    payload={"status": "running"},
+                )
 
     # ------------------------------------------------------------------ sessions
     async def get_or_start_host(self, session_id: uuid.UUID, org_id: uuid.UUID) -> SessionHost:
@@ -305,6 +397,8 @@ class Worker:
                 return host
             if host is not None:
                 await self.close_host(session_id, reason="restart")
+            if len(self.hosts) >= self.host_capacity():
+                await self._make_room()
             async with session_scope() as db:
                 session = await db.get(BrowserSession, session_id)
                 if session is None:
@@ -314,10 +408,21 @@ class Worker:
                 encrypted = session.storage_state_encrypted
                 open_url = (session.metadata_ or {}).get("open_url")
                 interactive = bool(session.interactive)
-                await db.execute(update(BrowserSession).where(BrowserSession.id == session_id).values(worker_id=self.id, desired_state="open"))
+                await db.execute(
+                    update(BrowserSession)
+                    .where(BrowserSession.id == session_id)
+                    .values(worker_id=self.id, desired_state="open")
+                )
             profile_dir.mkdir(parents=True, exist_ok=True)
             fresh_profile = not any(profile_dir.iterdir())
-            host = SessionHost(session_id=session_id, org_id=org_id, profile_dir=profile_dir, bus=get_bus(), worker_id=self.id, start_url=start_url)
+            host = SessionHost(
+                session_id=session_id,
+                org_id=org_id,
+                profile_dir=profile_dir,
+                bus=get_bus(),
+                worker_id=self.id,
+                start_url=start_url,
+            )
             host.interactive = interactive
             host.on_closed.append(self._on_host_closed)
             await host.start(url=open_url or None)
@@ -330,7 +435,9 @@ class Worker:
                 async with session_scope() as db:
                     session = await db.get(BrowserSession, session_id)
                     if session:
-                        session.metadata_ = {k: v for k, v in (session.metadata_ or {}).items() if k != "open_url"}
+                        session.metadata_ = {
+                            k: v for k, v in (session.metadata_ or {}).items() if k != "open_url"
+                        }
             self.hosts[session_id] = host
             return host
 
@@ -345,6 +452,42 @@ class Worker:
         if self.hosts.get(host.session_id) is host:
             self.hosts.pop(host.session_id, None)
 
+    def host_capacity(self) -> int:
+        """How many browsers this worker keeps open at once (see ``MAX_OPEN_SESSIONS_PER_WORKER``)."""
+        configured = self.settings.max_open_sessions_per_worker
+        return configured if configured > 0 else max(2, self.settings.max_concurrent_tasks_per_worker + 2)
+
+    async def _make_room(self) -> bool:
+        """Evict the longest-idle browser that no task or human is using.
+
+        Profiles and encrypted storage state stay on disk, so the evicted session simply relaunches
+        the next time it is needed. Returns False when every open browser is busy.
+        """
+        grace = self.settings.session_interactive_idle_seconds
+        candidates = [
+            (host.interactive, -host.idle_seconds(), session_id)
+            for session_id, host in self.hosts.items()
+            if host.in_use_by_task is None and (not host.interactive or host.idle_seconds() > grace)
+        ]
+        if not candidates:
+            return False
+        # Prefer browsers nobody is looking at, then the human-controlled one idle the longest.
+        candidates.sort()
+        _interactive, _idle, victim = candidates[0]
+        logger.info("Evicting idle browser session %s to free a slot on %s", victim, self.id)
+        await self.close_host(victim, reason="closed to free a browser slot")
+        return True
+
+    async def _note_waiting_for_slot(self, session_id: uuid.UUID) -> None:
+        """Make a session that cannot open yet say so instead of silently staying closed."""
+        message = f"Waiting for a free browser slot ({len(self.hosts)}/{self.host_capacity()} browsers busy on {self.id})"
+        async with session_scope() as db:
+            await db.execute(
+                update(BrowserSession)
+                .where(BrowserSession.id == session_id, BrowserSession.error != message)
+                .values(error=message)
+            )
+
     async def _reconcile_sessions(self) -> None:
         """Open/close browser sessions to match the desired state recorded by the API."""
         if "browser" not in self.capabilities:
@@ -358,16 +501,32 @@ class Worker:
                     )
                 )
             ).all()
-            closing = (await db.execute(select(BrowserSession.id).where(BrowserSession.desired_state == "closed", BrowserSession.worker_id == self.id))).scalars().all()
+            closing = (
+                (
+                    await db.execute(
+                        select(BrowserSession.id).where(
+                            BrowserSession.desired_state == "closed", BrowserSession.worker_id == self.id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
         for session_id, org_id in wanted:
             host = self.hosts.get(session_id)
             if host is not None and host.is_alive():
                 continue
-            if len(self.hosts) >= max(2, self.settings.max_concurrent_tasks_per_worker + 2):
+            if len(self.hosts) >= self.host_capacity() and not await self._make_room():
+                await self._note_waiting_for_slot(session_id)
                 continue
             async with session_scope() as db:
                 claimed = await db.execute(
-                    update(BrowserSession).where(BrowserSession.id == session_id, or_(BrowserSession.worker_id.is_(None), BrowserSession.worker_id == self.id)).values(worker_id=self.id)
+                    update(BrowserSession)
+                    .where(
+                        BrowserSession.id == session_id,
+                        or_(BrowserSession.worker_id.is_(None), BrowserSession.worker_id == self.id),
+                    )
+                    .values(worker_id=self.id)
                 )
                 if claimed.rowcount != 1:
                     continue
@@ -379,7 +538,11 @@ class Worker:
             host = self.hosts.get(session_id)
             if host is None:
                 async with session_scope() as db:
-                    await db.execute(update(BrowserSession).where(BrowserSession.id == session_id, BrowserSession.worker_id == self.id).values(worker_id=None, status=BrowserSessionStatus.closed.value, interactive=False))
+                    await db.execute(
+                        update(BrowserSession)
+                        .where(BrowserSession.id == session_id, BrowserSession.worker_id == self.id)
+                        .values(worker_id=None, status=BrowserSessionStatus.closed.value, interactive=False)
+                    )
                 continue
             if host.in_use_by_task is not None:
                 continue
@@ -400,7 +563,11 @@ class Worker:
             if self.runs:
                 await db.execute(update(Task).where(Task.id.in_(list(self.runs))).values(heartbeat_at=now))
             if self.hosts:
-                await db.execute(update(BrowserSession).where(BrowserSession.id.in_(list(self.hosts)), BrowserSession.worker_id == self.id).values(last_heartbeat_at=now))
+                await db.execute(
+                    update(BrowserSession)
+                    .where(BrowserSession.id.in_(list(self.hosts)), BrowserSession.worker_id == self.id)
+                    .values(last_heartbeat_at=now)
+                )
         for host in list(self.hosts.values()):
             with contextlib.suppress(Exception):
                 await host.heartbeat()
@@ -409,10 +576,19 @@ class Worker:
         threshold = datetime.now(UTC) - timedelta(seconds=self.settings.worker_stale_after_seconds)
         async with session_scope() as db:
             stale_tasks = (
-                await db.execute(
-                    select(Task).where(Task.status.in_(RUNNING_STATUSES), Task.worker_id.isnot(None), Task.worker_id != self.id, or_(Task.heartbeat_at.is_(None), Task.heartbeat_at < threshold))
+                (
+                    await db.execute(
+                        select(Task).where(
+                            Task.status.in_(RUNNING_STATUSES),
+                            Task.worker_id.isnot(None),
+                            Task.worker_id != self.id,
+                            or_(Task.heartbeat_at.is_(None), Task.heartbeat_at < threshold),
+                        )
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for task in stale_tasks:
                 hb = task.heartbeat_at
                 if hb is not None and hb.tzinfo is None and hb.replace(tzinfo=UTC) >= threshold:
@@ -425,17 +601,39 @@ class Worker:
                 task.human_control = False
                 task.queued_at = task.queued_at or datetime.now(UTC)
                 task.current_action = "Recovered after worker restart; waiting for a worker"
-                await emit(db, "task.queued", task.organization_id, "Task re-queued after its worker stopped responding", task_id=task.id, project_id=task.project_id, level="warning", payload={"status": "queued", "recovered": True})
+                await emit(
+                    db,
+                    "task.queued",
+                    task.organization_id,
+                    "Task re-queued after its worker stopped responding",
+                    task_id=task.id,
+                    project_id=task.project_id,
+                    level="warning",
+                    payload={"status": "queued", "recovered": True},
+                )
             stale_sessions = (
-                await db.execute(
-                    select(BrowserSession).where(
-                        BrowserSession.worker_id.isnot(None),
-                        BrowserSession.worker_id != self.id,
-                        BrowserSession.status.in_([BrowserSessionStatus.ready.value, BrowserSessionStatus.in_use.value, BrowserSessionStatus.launching.value]),
-                        or_(BrowserSession.last_heartbeat_at.is_(None), BrowserSession.last_heartbeat_at < threshold),
+                (
+                    await db.execute(
+                        select(BrowserSession).where(
+                            BrowserSession.worker_id.isnot(None),
+                            BrowserSession.worker_id != self.id,
+                            BrowserSession.status.in_(
+                                [
+                                    BrowserSessionStatus.ready.value,
+                                    BrowserSessionStatus.in_use.value,
+                                    BrowserSessionStatus.launching.value,
+                                ]
+                            ),
+                            or_(
+                                BrowserSession.last_heartbeat_at.is_(None),
+                                BrowserSession.last_heartbeat_at < threshold,
+                            ),
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for session in stale_sessions:
                 hb = session.last_heartbeat_at
                 if hb is not None and hb.tzinfo is None and hb.replace(tzinfo=UTC) >= threshold:

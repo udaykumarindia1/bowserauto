@@ -9,7 +9,9 @@ class AppError(Exception):
     status_code = 400
     code = "bad_request"
 
-    def __init__(self, message: str = "", *, code: str | None = None, details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, message: str = "", *, code: str | None = None, details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(message or self.__class__.__name__)
         self.message = message or self.__class__.__name__
         if code:
@@ -64,7 +66,9 @@ class AutomationError(Exception):
 
     retryable = True
 
-    def __init__(self, message: str, *, retryable: bool | None = None, details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, message: str, *, retryable: bool | None = None, details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(message)
         self.message = message
         if retryable is not None:

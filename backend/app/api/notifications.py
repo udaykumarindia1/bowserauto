@@ -15,9 +15,17 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 @router.get("", response_model=dict)
-async def list_notifications(auth: CurrentAuth, db: DB, unread_only: bool = False, limit: int = Query(default=50, le=200)) -> dict:
-    rows, unread = await notification_service.list_notifications(db, auth.org_id, auth.user_id, unread_only=unread_only, limit=limit)
-    return {"items": [NotificationOut.model_validate(r) for r in rows], "unread": unread, "channels": ["in_app", "browser", *configured_channels()]}
+async def list_notifications(
+    auth: CurrentAuth, db: DB, unread_only: bool = False, limit: int = Query(default=50, le=200)
+) -> dict:
+    rows, unread = await notification_service.list_notifications(
+        db, auth.org_id, auth.user_id, unread_only=unread_only, limit=limit
+    )
+    return {
+        "items": [NotificationOut.model_validate(r) for r in rows],
+        "unread": unread,
+        "channels": ["in_app", "browser", *configured_channels()],
+    }
 
 
 @router.post("/read", response_model=dict)

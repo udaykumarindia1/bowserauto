@@ -55,7 +55,14 @@ def _regex_or_str(value: str) -> str | re.Pattern[str]:
 class PlaywrightBrowser:
     """A persistent Chromium context bound to one browser session profile."""
 
-    def __init__(self, *, profile_dir: Path, downloads_dir: Path, headless: bool | None = None, launch_config: LaunchConfig | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        profile_dir: Path,
+        downloads_dir: Path,
+        headless: bool | None = None,
+        launch_config: LaunchConfig | None = None,
+    ) -> None:
         self.profile_dir = profile_dir
         self.downloads_dir = downloads_dir
         self.launch_config = launch_config or resolve_launch_config()
@@ -83,7 +90,10 @@ class PlaywrightBrowser:
             "user_data_dir": str(self.profile_dir),
             "headless": self.headless,
             "args": list(self.launch_config.args),
-            "viewport": {"width": settings.browser_viewport_width, "height": settings.browser_viewport_height},
+            "viewport": {
+                "width": settings.browser_viewport_width,
+                "height": settings.browser_viewport_height,
+            },
             "accept_downloads": True,
             "downloads_path": str(self.downloads_dir),
             "ignore_default_args": ["--enable-automation"],
@@ -274,7 +284,9 @@ class PlaywrightDriver:
             return ""
 
     # ------------------------------------------------------------- target lookup
-    async def _resolve(self, target: TargetSpec, *, timeout_ms: int = 0, must_exist: bool = True) -> Locator | ElementHandle | None:
+    async def _resolve(
+        self, target: TargetSpec, *, timeout_ms: int = 0, must_exist: bool = True
+    ) -> Locator | ElementHandle | None:
         spec = normalize_target(target)
         if "any" in spec:
             deadline = time.monotonic() + timeout_ms / 1000
@@ -305,7 +317,9 @@ class PlaywrightDriver:
             element = handle.as_element()
             if element is None:
                 if must_exist:
-                    raise ElementNotFound(f"Element [{spec['index']}] is no longer on the page; take a new snapshot")
+                    raise ElementNotFound(
+                        f"Element [{spec['index']}] is no longer on the page; take a new snapshot"
+                    )
                 return None
             return element
         locator = self._locator(spec)
@@ -376,7 +390,15 @@ class PlaywrightDriver:
         except PlaywrightError as exc:
             raise self._wrap(exc) from exc
 
-    async def type(self, target: TargetSpec, text: str, *, clear: bool = True, press_enter: bool = False, delay_ms: int = 0) -> None:
+    async def type(
+        self,
+        target: TargetSpec,
+        text: str,
+        *,
+        clear: bool = True,
+        press_enter: bool = False,
+        delay_ms: int = 0,
+    ) -> None:
         timeout = self._timeout(None)
         element = await self._resolve(target, timeout_ms=min(timeout, 5000))
         try:
@@ -424,11 +446,15 @@ class PlaywrightDriver:
                 # Custom dropdowns: open it and click the option text.
                 await element.click()  # type: ignore[union-attr]
                 try:
-                    await self.click({"any": [{"role": "option", "name": value}, {"text": value}]}, timeout_ms=5000)
+                    await self.click(
+                        {"any": [{"role": "option", "name": value}, {"text": value}]}, timeout_ms=5000
+                    )
                 except ElementNotFound:
                     raise ElementNotFound(f"Option '{value}' not found in {describe_target(target)}") from exc
 
-    async def scroll(self, direction: str = "down", amount: int = 600, target: TargetSpec | None = None) -> None:
+    async def scroll(
+        self, direction: str = "down", amount: int = 600, target: TargetSpec | None = None
+    ) -> None:
         dy = amount if direction == "down" else -amount if direction == "up" else 0
         dx = amount if direction == "right" else -amount if direction == "left" else 0
         try:
@@ -468,7 +494,9 @@ class PlaywrightDriver:
             chooser = await chooser_info.value
             await chooser.set_files(paths)
         except PlaywrightTimeout as exc:
-            raise ElementNotFound(f"Upload control did not open a file chooser: {describe_target(target)}") from exc
+            raise ElementNotFound(
+                f"Upload control did not open a file chooser: {describe_target(target)}"
+            ) from exc
         except PlaywrightError as exc:
             raise self._wrap(exc) from exc
 
@@ -484,7 +512,9 @@ class PlaywrightDriver:
         except (ElementNotFound, PlaywrightError):
             return False
 
-    async def wait_for(self, target: TargetSpec, *, state: str = "visible", timeout_ms: int | None = None) -> bool:
+    async def wait_for(
+        self, target: TargetSpec, *, state: str = "visible", timeout_ms: int | None = None
+    ) -> bool:
         timeout = self._timeout(timeout_ms)
         deadline = time.monotonic() + timeout / 1000
         while time.monotonic() < deadline:
@@ -500,14 +530,17 @@ class PlaywrightDriver:
         pattern = _regex_or_str(text)
         while time.monotonic() < deadline:
             body = await self.page_text(30_000)
-            if (pattern.search(body) if isinstance(pattern, re.Pattern) else text.lower() in body.lower()):
+            if pattern.search(body) if isinstance(pattern, re.Pattern) else text.lower() in body.lower():
                 return True
             await asyncio.sleep(0.5)
         return False
 
     async def wait_for_url(self, pattern: str, *, timeout_ms: int | None = None) -> bool:
         try:
-            await self.page.wait_for_url(_regex_or_str(pattern) if pattern.startswith("/") else f"**{pattern}**", timeout=self._timeout(timeout_ms))
+            await self.page.wait_for_url(
+                _regex_or_str(pattern) if pattern.startswith("/") else f"**{pattern}**",
+                timeout=self._timeout(timeout_ms),
+            )
             return True
         except PlaywrightTimeout:
             return False
@@ -547,15 +580,31 @@ class PlaywrightDriver:
                 raise self._wrap(exc) from exc
         elements = [
             InteractiveElement(
-                index=e["index"], tag=e["tag"], role=e["role"], name=e["name"], text=e["text"], placeholder=e["placeholder"], value=e["value"],
-                href=e["href"], input_type=e["input_type"], disabled=e["disabled"], checked=e["checked"], bbox=tuple(e["bbox"]) if e.get("bbox") else None,
+                index=e["index"],
+                tag=e["tag"],
+                role=e["role"],
+                name=e["name"],
+                text=e["text"],
+                placeholder=e["placeholder"],
+                value=e["value"],
+                href=e["href"],
+                input_type=e["input_type"],
+                disabled=e["disabled"],
+                checked=e["checked"],
+                bbox=tuple(e["bbox"]) if e.get("bbox") else None,
                 selector=e.get("selector", ""),
             )
             for e in data.get("elements", [])
         ]
         snap = PageSnapshot(
-            url=data.get("url", page.url), title=data.get("title", ""), text=data.get("text", ""), elements=elements, loading=bool(data.get("loading")),
-            scroll=tuple(data.get("scroll", (0, 0, 0))), tabs=await self.list_tabs(), file_inputs=int(data.get("file_inputs", 0)),
+            url=data.get("url", page.url),
+            title=data.get("title", ""),
+            text=data.get("text", ""),
+            elements=elements,
+            loading=bool(data.get("loading")),
+            scroll=tuple(data.get("scroll", (0, 0, 0))),
+            tabs=await self.list_tabs(),
+            file_inputs=int(data.get("file_inputs", 0)),
         )
         if include_screenshot:
             with contextlib.suppress(Exception):
@@ -594,7 +643,9 @@ class PlaywrightDriver:
 
     async def screenshot(self, *, full_page: bool = False, quality: int = 60) -> bytes:
         try:
-            return await self.page.screenshot(type="jpeg", quality=quality, full_page=full_page, timeout=15_000)
+            return await self.page.screenshot(
+                type="jpeg", quality=quality, full_page=full_page, timeout=15_000
+            )
         except PlaywrightError as exc:
             raise self._wrap(exc) from exc
 
@@ -605,7 +656,9 @@ class PlaywrightDriver:
             raise self._wrap(exc) from exc
 
     # ---------------------------------------------------------- downloads / tabs
-    async def download(self, target: TargetSpec | None, *, timeout_ms: int | None = None, trigger: Any = None) -> DownloadResult:
+    async def download(
+        self, target: TargetSpec | None, *, timeout_ms: int | None = None, trigger: Any = None
+    ) -> DownloadResult:
         timeout = timeout_ms if timeout_ms is not None else 120_000
         page = self.page
         try:
@@ -621,7 +674,12 @@ class PlaywrightDriver:
             path = await download.path()
             if path is None:
                 raise DownloadFailed("Download produced no file")
-            return DownloadResult(path=Path(path), suggested_filename=download.suggested_filename, url=download.url, size_bytes=Path(path).stat().st_size)
+            return DownloadResult(
+                path=Path(path),
+                suggested_filename=download.suggested_filename,
+                url=download.url,
+                size_bytes=Path(path).stat().st_size,
+            )
         except PlaywrightTimeout as exc:
             raise DownloadFailed("No download started within the timeout") from exc
         except PlaywrightError as exc:
@@ -681,7 +739,11 @@ class PlaywrightDriver:
     # -------------------------------------------------------------------- errors
     def _wrap(self, exc: Exception) -> Exception:
         message = str(exc)
-        if "Target page, context or browser has been closed" in message or "Target closed" in message or "browser has been closed" in message:
+        if (
+            "Target page, context or browser has been closed" in message
+            or "Target closed" in message
+            or "browser has been closed" in message
+        ):
             return BrowserCrashed("The browser or tab was closed unexpectedly")
         if "crashed" in message.lower():
             return BrowserCrashed("The page crashed")

@@ -26,7 +26,7 @@ function tagFor(message: ConsoleMessage, assistant: string): { label: string; cl
   };
 }
 
-/** Right-hand JARVIS column: ▸ ACTIVITY LOG feed + ▸ COMMAND INPUT with voice controls. */
+/** Right-hand assistant (AVINASH) column: ▸ ACTIVITY LOG feed + ▸ COMMAND INPUT with voice controls. */
 export function JarvisConsole({ className }: { className?: string }) {
   const controller = useJarvisConsole();
   const messages = useJarvis((s) => s.messages);
@@ -71,7 +71,7 @@ export function JarvisConsole({ className }: { className?: string }) {
   const readOnly = role === "viewer";
 
   return (
-    <aside className={cn("flex h-full min-h-0 flex-col bg-hud-dark", className)} aria-label="JARVIS console">
+    <aside className={cn("flex h-full min-h-0 flex-col bg-hud-dark", className)} aria-label={`${prefs.assistantName} console`}>
       {/* ---------------------------------------------------------------- feed */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <h2 className="hud-section border-0 pb-0">ACTIVITY LOG</h2>

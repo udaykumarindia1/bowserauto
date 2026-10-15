@@ -23,15 +23,26 @@ logger = logging.getLogger(__name__)
 WORDS_PER_SECOND = 2.5  # average narration pace (~150 wpm)
 
 SCENE_MARKER = re.compile(r"^\s*(?:#+\s*)?(?:scene|shot|sequence)\s*[#:\-]?\s*(\d+)[^\n]*$", re.I)
-SLUGLINE = re.compile(r"^\s*(?:\d+\s*[.)]\s*)?(INT|EXT|INT/EXT|I/E)\.?\s*[\-–—:]?\s*(.+?)(?:\s*[\-–—]\s*(DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|AFTERNOON|CONTINUOUS|LATER))?\s*$", re.I)
+SLUGLINE = re.compile(
+    r"^\s*(?:\d+\s*[.)]\s*)?(INT|EXT|INT/EXT|I/E)\.?\s*[\-–—:]?\s*(.+?)(?:\s*[\-–—]\s*(DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|AFTERNOON|CONTINUOUS|LATER))?\s*$",
+    re.I,
+)
 SEPARATOR = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,}|={3,})\s*$")
 DIALOGUE_LINE = re.compile(r"^\s*([A-Z][A-Z0-9 .'\-]{1,30}?)\s*(?:\([^)]*\))?\s*:\s*(.+)$")
 DIALOGUE_BLOCK_NAME = re.compile(r"^\s*([A-Z][A-Z0-9 .'\-]{1,30})\s*(?:\([^)]*\))?\s*$")
 PARENTHETICAL = re.compile(r"^\s*\(.*\)\s*$")
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
-MOVEMENT_WORDS = re.compile(r"\b(runs?|running|walks?|walking|rides?|riding|drives?|driving|chases?|flies|flying|jumps?|climbs?|dances?|swims?|races?)\b", re.I)
-EMOTION_WORDS = re.compile(r"\b(cries|crying|smiles?|laughs?|whispers?|screams?|tears|stares?|gazes?|looks? (?:at|into))\b", re.I)
-LANDSCAPE_WORDS = re.compile(r"\b(village|city|forest|mountain|river|pond|lake|ocean|sea|desert|sky|field|street|market|temple|skyline|valley|beach|road|highway)\b", re.I)
+MOVEMENT_WORDS = re.compile(
+    r"\b(runs?|running|walks?|walking|rides?|riding|drives?|driving|chases?|flies|flying|jumps?|climbs?|dances?|swims?|races?)\b",
+    re.I,
+)
+EMOTION_WORDS = re.compile(
+    r"\b(cries|crying|smiles?|laughs?|whispers?|screams?|tears|stares?|gazes?|looks? (?:at|into))\b", re.I
+)
+LANDSCAPE_WORDS = re.compile(
+    r"\b(village|city|forest|mountain|river|pond|lake|ocean|sea|desert|sky|field|street|market|temple|skyline|valley|beach|road|highway)\b",
+    re.I,
+)
 
 CAMERA_LIBRARY = {
     "establishing": "Wide establishing shot, slow aerial drift, deep depth of field",
@@ -109,7 +120,9 @@ class HeuristicSceneAnalyzer:
         if ctx.target_duration_seconds:
             self._fit_target_duration(drafts, ctx.target_duration_seconds, clip, warnings)
         if len(drafts) > ctx.max_scenes:
-            warnings.append(f"Script produced {len(drafts)} scenes; truncated to the limit of {ctx.max_scenes}")
+            warnings.append(
+                f"Script produced {len(drafts)} scenes; truncated to the limit of {ctx.max_scenes}"
+            )
             drafts = drafts[: ctx.max_scenes]
         for i, draft in enumerate(drafts):
             draft.camera = draft.camera or self._camera_for(draft, i)
@@ -136,14 +149,23 @@ class HeuristicSceneAnalyzer:
                 explicit = True
                 current = {"title": "", "location": "", "lines": []}
                 if marker:
-                    rest = re.sub(r"^\s*(?:#+\s*)?(?:scene|shot|sequence)\s*[#:\-]?\s*\d+\s*[:\-–—.]?\s*", "", line, flags=re.I).strip()
+                    rest = re.sub(
+                        r"^\s*(?:#+\s*)?(?:scene|shot|sequence)\s*[#:\-]?\s*\d+\s*[:\-–—.]?\s*",
+                        "",
+                        line,
+                        flags=re.I,
+                    ).strip()
                     slug_in_rest = SLUGLINE.match(rest) if rest else None
                     if slug_in_rest:
                         current["location"] = _clean_location(slug_in_rest)
-                    elif rest and (len(rest.split()) > 8 or rest.endswith((".", "!", "?")) or len(_sentences(rest)) > 1):
+                    elif rest and (
+                        len(rest.split()) > 8 or rest.endswith((".", "!", "?")) or len(_sentences(rest)) > 1
+                    ):
                         # "Scene 3: Night. A storm rolls in." – an inline description, not just a heading:
                         # keep it as scene content so characters/location/visuals are derived from it.
-                        current["title"] = _title_from_text(_sentences(rest)[0] if _sentences(rest) else rest, len(blocks)).rstrip(".")
+                        current["title"] = _title_from_text(
+                            _sentences(rest)[0] if _sentences(rest) else rest, len(blocks)
+                        ).rstrip(".")
                         current["lines"].append(rest)
                     else:
                         current["title"] = rest
@@ -189,7 +211,9 @@ class HeuristicSceneAnalyzer:
             action_lines.append(line.strip())
         action_text = " ".join(action_lines).strip()
         known_names = [c["name"] for c in ctx.characters if c.get("name")]
-        characters = _detect_characters(action_text + " " + " ".join(d[1] for d in dialogue_lines), known_names)
+        characters = _detect_characters(
+            action_text + " " + " ".join(d[1] for d in dialogue_lines), known_names
+        )
         for speaker, _ in dialogue_lines:
             if speaker not in characters:
                 characters.append(speaker)
@@ -224,18 +248,24 @@ class HeuristicSceneAnalyzer:
             total = sum(_estimate_seconds(t) for _, t in chunk)
             duration = float(min(max(round(total, 1), min(4.0, clip)), clip))
             draft = SceneDraft(
-                title=(block["title"] if idx == 0 else f"{block['title']} (part {idx + 1})") if block["title"] else "",
+                title=(block["title"] if idx == 0 else f"{block['title']} (part {idx + 1})")
+                if block["title"]
+                else "",
                 duration_seconds=duration,
-                characters=[c for c in characters if any(c.lower() in t.lower() for _, t in chunk)] or characters[:2],
+                characters=[c for c in characters if any(c.lower() in t.lower() for _, t in chunk)]
+                or characters[:2],
                 location=location,
-                visual=" ".join(actions) or f"{', '.join(characters) or 'The subject'} in {location or 'the scene'}",
+                visual=" ".join(actions)
+                or f"{', '.join(characters) or 'The subject'} in {location or 'the scene'}",
                 dialogue="\n".join(dialogues),
                 narration=" ".join(actions),
             )
             scenes.append(draft)
         return scenes
 
-    def _fit_target_duration(self, drafts: list[SceneDraft], target: float, clip: float, warnings: list[str]) -> None:
+    def _fit_target_duration(
+        self, drafts: list[SceneDraft], target: float, clip: float, warnings: list[str]
+    ) -> None:
         total = sum(d.duration_seconds for d in drafts)
         if total <= 0:
             return
@@ -252,7 +282,9 @@ class HeuristicSceneAnalyzer:
 
     def _camera_for(self, draft: SceneDraft, index: int) -> str:
         text = f"{draft.visual} {draft.dialogue}"
-        if index == 0 or (LANDSCAPE_WORDS.search(draft.location or "") and not draft.dialogue and len(draft.visual) < 160):
+        if index == 0 or (
+            LANDSCAPE_WORDS.search(draft.location or "") and not draft.dialogue and len(draft.visual) < 160
+        ):
             return CAMERA_LIBRARY["establishing"]
         if draft.dialogue:
             return CAMERA_LIBRARY["dialogue"]
@@ -268,8 +300,8 @@ class LLMSceneAnalyzer:
     SYSTEM_PROMPT = (
         "You are a film director and prompt engineer preparing a script for an AI video generator. "
         "Split the script into sequential scenes that each fit in a single generated clip. "
-        "Return ONLY JSON of the shape {\"scenes\": [{\"title\": str, \"duration_seconds\": number, \"characters\": [str], "
-        "\"location\": str, \"visual\": str, \"camera\": str, \"dialogue\": str, \"narration\": str, \"prompt\": str}]}. "
+        'Return ONLY JSON of the shape {"scenes": [{"title": str, "duration_seconds": number, "characters": [str], '
+        '"location": str, "visual": str, "camera": str, "dialogue": str, "narration": str, "prompt": str}]}. '
         "The prompt must be a complete, self-contained generation prompt describing subject, action, setting, lighting, "
         "camera and style, and must include the physical description of every character that appears. Never exceed the "
         "maximum clip duration. Do not add commentary."
@@ -281,14 +313,22 @@ class LLMSceneAnalyzer:
 
     async def analyze(self, script: str, ctx: AnalysisContext) -> AnalysisResult:
         try:
-            character_lines = "\n".join(f"- {c['name']}: {c.get('description', '')}" for c in ctx.characters if c.get("name")) or "(none provided)"
+            character_lines = (
+                "\n".join(
+                    f"- {c['name']}: {c.get('description', '')}" for c in ctx.characters if c.get("name")
+                )
+                or "(none provided)"
+            )
             user = (
                 f"Visual style: {ctx.visual_style}\nAspect ratio: {ctx.aspect_ratio}\nMaximum clip duration: {ctx.clip_duration_seconds} seconds\n"
                 f"Target total duration: {ctx.target_duration_seconds or 'not specified'} seconds\nTarget platform: {ctx.platform_name}\n"
                 f"Characters:\n{character_lines}\n\nSCRIPT:\n{script[:60_000]}"
             )
             response = await self.client.complete(
-                [LLMMessage("system", self.SYSTEM_PROMPT), LLMMessage("user", user)], json_mode=True, max_tokens=8000, temperature=0.3
+                [LLMMessage("system", self.SYSTEM_PROMPT), LLMMessage("user", user)],
+                json_mode=True,
+                max_tokens=8000,
+                temperature=0.3,
             )
             data = response.json()
             raw_scenes = data.get("scenes") if isinstance(data, dict) else data
@@ -325,7 +365,9 @@ class LLMSceneAnalyzer:
             logger.warning("LLM scene analysis failed, falling back to heuristics: %s", exc)
             result = self.fallback.analyze(script, ctx)
             result.method = "heuristic-fallback"
-            result.warnings.insert(0, f"AI analysis unavailable ({str(exc)[:160]}); used rule-based breakdown instead.")
+            result.warnings.insert(
+                0, f"AI analysis unavailable ({str(exc)[:160]}); used rule-based breakdown instead."
+            )
             return result
 
 
@@ -351,7 +393,9 @@ def build_prompt(draft: SceneDraft, ctx: AnalysisContext) -> str:
         parts.append(f"Setting: {draft.location}")
     if draft.dialogue:
         first_line = draft.dialogue.split("\n")[0]
-        parts.append(f"Characters speaking naturally, lip-synced: \"{first_line.split(':', 1)[-1].strip()[:140]}\"")
+        parts.append(
+            f'Characters speaking naturally, lip-synced: "{first_line.split(":", 1)[-1].strip()[:140]}"'
+        )
     if draft.camera:
         parts.append(f"Camera: {draft.camera}")
     style = ctx.visual_style.strip().lower()
@@ -389,7 +433,12 @@ def _clean_location(match: re.Match[str]) -> str:
     place = match.group(2).strip(" -–—:.")
     tod = match.group(3)
     prefix = match.group(1).upper()
-    where = {"INT": "Interior", "EXT": "Exterior", "INT/EXT": "Interior/Exterior", "I/E": "Interior/Exterior"}.get(prefix, prefix)
+    where = {
+        "INT": "Interior",
+        "EXT": "Exterior",
+        "INT/EXT": "Interior/Exterior",
+        "I/E": "Interior/Exterior",
+    }.get(prefix, prefix)
     text = f"{where}: {place.title() if place.isupper() else place}"
     if tod:
         text += f", {tod.lower()}"
@@ -397,7 +446,10 @@ def _clean_location(match: re.Match[str]) -> str:
 
 
 def _guess_location(text: str) -> str:
-    m = re.search(r"\b(?:at|in|inside|near|on|across|through)\s+(?:the|a|an)\s+([A-Za-z][A-Za-z\s'-]{2,40}?)(?=[,.;:!?]|\s(?:where|while|as|and|with|under|when)\b|$)", text)
+    m = re.search(
+        r"\b(?:at|in|inside|near|on|across|through)\s+(?:the|a|an)\s+([A-Za-z][A-Za-z\s'-]{2,40}?)(?=[,.;:!?]|\s(?:where|while|as|and|with|under|when)\b|$)",
+        text,
+    )
     if m:
         return m.group(1).strip().capitalize()[:120]
     m = LANDSCAPE_WORDS.search(text)
@@ -416,7 +468,24 @@ def _detect_characters(text: str, known_names: list[str]) -> list[str]:
         counts: dict[str, int] = {}
         for c in candidates:
             counts[c] = counts.get(c, 0) + 1
-        stop = {"The", "And", "But", "Then", "When", "She", "His", "Her", "They", "That", "This", "With", "From", "Into", "Scene", "Camera"}
+        stop = {
+            "The",
+            "And",
+            "But",
+            "Then",
+            "When",
+            "She",
+            "His",
+            "Her",
+            "They",
+            "That",
+            "This",
+            "With",
+            "From",
+            "Into",
+            "Scene",
+            "Camera",
+        }
         for name, count in counts.items():
             if count >= 2 and name not in stop:
                 found.append(name)
@@ -450,10 +519,15 @@ def _to_float(value: Any, default: float) -> float:
         return default
 
 
-async def analyze_script(script: str, ctx: AnalysisContext, llm: LLMClient | None, *, use_llm: bool | None = None) -> AnalysisResult:
+async def analyze_script(
+    script: str, ctx: AnalysisContext, llm: LLMClient | None, *, use_llm: bool | None = None
+) -> AnalysisResult:
     if llm is not None and use_llm is not False:
         return await LLMSceneAnalyzer(llm).analyze(script, ctx)
     result = HeuristicSceneAnalyzer().analyze(script, ctx)
     if use_llm is True and llm is None:
-        result.warnings.insert(0, "No AI provider is configured; used rule-based breakdown. Configure an LLM in Settings for smarter scenes.")
+        result.warnings.insert(
+            0,
+            "No AI provider is configured; used rule-based breakdown. Configure an LLM in Settings for smarter scenes.",
+        )
     return result

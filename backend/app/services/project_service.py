@@ -21,7 +21,9 @@ from app.storage.files import sha256_file, sniff_kind
 from app.storage.paths import ensure_project_dirs, project_dir, safe_filename, unique_path
 
 
-async def list_projects(db: AsyncSession, org_id: uuid.UUID, *, include_archived: bool = False) -> list[dict[str, Any]]:
+async def list_projects(
+    db: AsyncSession, org_id: uuid.UUID, *, include_archived: bool = False
+) -> list[dict[str, Any]]:
     query = select(Project).where(Project.organization_id == org_id)
     if not include_archived:
         query = query.where(Project.status != "archived")
@@ -31,7 +33,15 @@ async def list_projects(db: AsyncSession, org_id: uuid.UUID, *, include_archived
     ids = [p.id for p in projects]
     counts = (
         await db.execute(
-            select(Scene.project_id, func.count(Scene.id), func.sum(func.cast(Scene.status == SceneStatus.completed.value, type_=__import__("sqlalchemy").Integer)))
+            select(
+                Scene.project_id,
+                func.count(Scene.id),
+                func.sum(
+                    func.cast(
+                        Scene.status == SceneStatus.completed.value, type_=__import__("sqlalchemy").Integer
+                    )
+                ),
+            )
             .where(Scene.project_id.in_(ids))
             .group_by(Scene.project_id)
         )
@@ -51,7 +61,15 @@ async def list_projects(db: AsyncSession, org_id: uuid.UUID, *, include_archived
     for p in projects:
         total, completed = stats.get(p.id, (0, 0))
         task = active.get(p.id)
-        out.append({"project": p, "scene_count": int(total), "completed_scenes": int(completed), "active_task_id": task[0] if task else None, "active_task_status": task[1] if task else None})
+        out.append(
+            {
+                "project": p,
+                "scene_count": int(total),
+                "completed_scenes": int(completed),
+                "active_task_id": task[0] if task else None,
+                "active_task_status": task[1] if task else None,
+            }
+        )
     return out
 
 
@@ -62,7 +80,9 @@ async def get_project(db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID
     return project
 
 
-async def create_project(db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, data: dict[str, Any]) -> Project:
+async def create_project(
+    db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID, data: dict[str, Any]
+) -> Project:
     if get_adapter_class(data.get("platform_key") or "mock") is None:
         raise ValidationFailed(f"Unknown platform '{data.get('platform_key')}'")
     project = Project(organization_id=org_id, created_by=user_id, **data)
@@ -99,7 +119,11 @@ async def update_project(db: AsyncSession, project: Project, data: dict[str, Any
 
 async def delete_project(db: AsyncSession, project: Project) -> None:
     active = (
-        await db.execute(select(Task.id).where(Task.project_id == project.id, Task.status.in_([s.value for s in TaskStatus if s.is_active])))
+        await db.execute(
+            select(Task.id).where(
+                Task.project_id == project.id, Task.status.in_([s.value for s in TaskStatus if s.is_active])
+            )
+        )
     ).scalar_one_or_none()
     if active is not None:
         raise ConflictError("Stop the running task before deleting this project")
@@ -121,18 +145,41 @@ def _write_script_copy(project: Project) -> None:
 
 
 async def project_stats(db: AsyncSession, project: Project) -> dict[str, Any]:
-    scene_rows = (await db.execute(select(Scene.status, func.count(Scene.id)).where(Scene.project_id == project.id).group_by(Scene.status))).all()
+    scene_rows = (
+        await db.execute(
+            select(Scene.status, func.count(Scene.id))
+            .where(Scene.project_id == project.id)
+            .group_by(Scene.status)
+        )
+    ).all()
     by_status = {status: int(count) for status, count in scene_rows}
     total = sum(by_status.values())
-    duration = (await db.execute(select(func.coalesce(func.sum(Scene.duration_seconds), 0)).where(Scene.project_id == project.id))).scalar_one()
+    duration = (
+        await db.execute(
+            select(func.coalesce(func.sum(Scene.duration_seconds), 0)).where(Scene.project_id == project.id)
+        )
+    ).scalar_one()
     files = (
-        await db.execute(select(func.count(GeneratedFile.id), func.coalesce(func.sum(GeneratedFile.size_bytes), 0)).where(GeneratedFile.project_id == project.id))
+        await db.execute(
+            select(func.count(GeneratedFile.id), func.coalesce(func.sum(GeneratedFile.size_bytes), 0)).where(
+                GeneratedFile.project_id == project.id
+            )
+        )
     ).one()
     active_task = (
-        await db.execute(
-            select(Task).where(Task.project_id == project.id, Task.status.in_([s.value for s in TaskStatus if s.is_active])).order_by(Task.created_at.desc())
+        (
+            await db.execute(
+                select(Task)
+                .where(
+                    Task.project_id == project.id,
+                    Task.status.in_([s.value for s in TaskStatus if s.is_active]),
+                )
+                .order_by(Task.created_at.desc())
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return {
         "scene_count": total,
         "scenes_by_status": by_status,
@@ -147,7 +194,15 @@ async def project_stats(db: AsyncSession, project: Project) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- characters
 async def list_characters(db: AsyncSession, project_id: uuid.UUID) -> list[Character]:
-    return list((await db.execute(select(Character).where(Character.project_id == project_id).order_by(Character.created_at))).scalars().all())
+    return list(
+        (
+            await db.execute(
+                select(Character).where(Character.project_id == project_id).order_by(Character.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
 
 async def create_character(db: AsyncSession, project: Project, data: dict[str, Any]) -> Character:
@@ -166,7 +221,9 @@ async def get_character(db: AsyncSession, project: Project, character_id: uuid.U
     return character
 
 
-async def update_character(db: AsyncSession, project: Project, character_id: uuid.UUID, data: dict[str, Any]) -> Character:
+async def update_character(
+    db: AsyncSession, project: Project, character_id: uuid.UUID, data: dict[str, Any]
+) -> Character:
     character = await get_character(db, project, character_id)
     if data.get("reference_asset_id"):
         await get_asset(db, project.organization_id, data["reference_asset_id"])
@@ -189,20 +246,30 @@ async def get_asset(db: AsyncSession, org_id: uuid.UUID, asset_id: uuid.UUID) ->
     return asset
 
 
-async def list_assets(db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID | None = None) -> list[Asset]:
+async def list_assets(
+    db: AsyncSession, org_id: uuid.UUID, project_id: uuid.UUID | None = None
+) -> list[Asset]:
     query = select(Asset).where(Asset.organization_id == org_id)
     if project_id:
         query = query.where(Asset.project_id == project_id)
     return list((await db.execute(query.order_by(Asset.created_at.desc()))).scalars().all())
 
 
-async def save_upload(db: AsyncSession, project: Project, upload: UploadFile, *, kind: str, user_id: uuid.UUID) -> Asset:
+async def save_upload(
+    db: AsyncSession, project: Project, upload: UploadFile, *, kind: str, user_id: uuid.UUID
+) -> Asset:
     settings = get_settings()
     original = upload.filename or "upload"
     suffix = Path(original).suffix.lower()
     if suffix not in settings.allowed_upload_extensions:
         raise ValidationFailed(f"File type {suffix or '(none)'} is not allowed")
-    folder = ensure_project_dirs(project.id) / ("references" if kind in ("reference", "character_reference") else "script" if kind == "script" else "references")
+    folder = ensure_project_dirs(project.id) / (
+        "references"
+        if kind in ("reference", "character_reference")
+        else "script"
+        if kind == "script"
+        else "references"
+    )
     target = unique_path(folder / safe_filename(original, f"upload{suffix}"))
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     written = 0
@@ -233,7 +300,9 @@ async def save_upload(db: AsyncSession, project: Project, upload: UploadFile, *,
         kind=kind,
         filename=target.name,
         path=str(target),
-        mime_type=sniffed if sniffed != "application/octet-stream" else (upload.content_type or "application/octet-stream"),
+        mime_type=sniffed
+        if sniffed != "application/octet-stream"
+        else (upload.content_type or "application/octet-stream"),
         size_bytes=written,
         sha256=sha256_file(target),
         metadata_={"original_filename": original},
@@ -256,7 +325,11 @@ async def delete_asset(db: AsyncSession, asset: Asset) -> None:
 
 # -------------------------------------------------------------------------------- scenes
 async def list_scenes(db: AsyncSession, project_id: uuid.UUID) -> list[Scene]:
-    return list((await db.execute(select(Scene).where(Scene.project_id == project_id).order_by(Scene.index))).scalars().all())
+    return list(
+        (await db.execute(select(Scene).where(Scene.project_id == project_id).order_by(Scene.index)))
+        .scalars()
+        .all()
+    )
 
 
 async def get_scene(db: AsyncSession, project: Project, scene_id: uuid.UUID) -> Scene:
@@ -279,13 +352,22 @@ async def renumber_scenes(db: AsyncSession, project_id: uuid.UUID) -> list[Scene
     return scenes
 
 
-async def replace_scenes(db: AsyncSession, project: Project, drafts: list[dict[str, Any]], *, replace_existing: bool) -> list[Scene]:
+async def replace_scenes(
+    db: AsyncSession, project: Project, drafts: list[dict[str, Any]], *, replace_existing: bool
+) -> list[Scene]:
     settings = get_settings()
     existing = await list_scenes(db, project.id)
     if replace_existing:
-        locked = [s for s in existing if s.status in (SceneStatus.generating.value, SceneStatus.processing.value, SceneStatus.downloading.value)]
+        locked = [
+            s
+            for s in existing
+            if s.status
+            in (SceneStatus.generating.value, SceneStatus.processing.value, SceneStatus.downloading.value)
+        ]
         if locked:
-            raise ConflictError("Scenes are currently being generated; stop the task before re-analysing the script")
+            raise ConflictError(
+                "Scenes are currently being generated; stop the task before re-analysing the script"
+            )
         for scene in existing:
             await db.delete(scene)
         await db.flush()
@@ -297,14 +379,23 @@ async def replace_scenes(db: AsyncSession, project: Project, drafts: list[dict[s
     created: list[Scene] = []
     for offset, draft in enumerate(drafts):
         index = start + offset
-        scene = Scene(organization_id=project.organization_id, project_id=project.id, index=index, code=_scene_code(index), status=SceneStatus.draft.value, **draft)
+        scene = Scene(
+            organization_id=project.organization_id,
+            project_id=project.id,
+            index=index,
+            code=_scene_code(index),
+            status=SceneStatus.draft.value,
+            **draft,
+        )
         db.add(scene)
         created.append(scene)
     await db.flush()
     return created
 
 
-async def add_scene(db: AsyncSession, project: Project, data: dict[str, Any], *, after_scene_id: uuid.UUID | None = None) -> Scene:
+async def add_scene(
+    db: AsyncSession, project: Project, data: dict[str, Any], *, after_scene_id: uuid.UUID | None = None
+) -> Scene:
     scenes = await list_scenes(db, project.id)
     if len(scenes) >= get_settings().max_scenes_per_task:
         raise ValidationFailed("Scene limit reached for this project")
@@ -327,7 +418,13 @@ async def add_scene(db: AsyncSession, project: Project, data: dict[str, Any], *,
         data.setdefault("negative_prompt", "")
         if not data["negative_prompt"]:
             data["negative_prompt"] = ctx.negative_prompt
-    scene = Scene(organization_id=project.organization_id, project_id=project.id, index=position + 1, code=_scene_code(position + 1), **data)
+    scene = Scene(
+        organization_id=project.organization_id,
+        project_id=project.id,
+        index=position + 1,
+        code=_scene_code(position + 1),
+        **data,
+    )
     for s in scenes[position:]:
         s.index += 1
     db.add(scene)
@@ -336,9 +433,15 @@ async def add_scene(db: AsyncSession, project: Project, data: dict[str, Any], *,
     return scene
 
 
-async def update_scene(db: AsyncSession, project: Project, scene_id: uuid.UUID, data: dict[str, Any]) -> Scene:
+async def update_scene(
+    db: AsyncSession, project: Project, scene_id: uuid.UUID, data: dict[str, Any]
+) -> Scene:
     scene = await get_scene(db, project, scene_id)
-    if scene.status in (SceneStatus.generating.value, SceneStatus.processing.value, SceneStatus.downloading.value) and any(k != "status" for k in data):
+    if scene.status in (
+        SceneStatus.generating.value,
+        SceneStatus.processing.value,
+        SceneStatus.downloading.value,
+    ) and any(k != "status" for k in data):
         raise ConflictError("This scene is currently being generated")
     if "reference_asset_ids" in data and data["reference_asset_ids"] is not None:
         data["reference_asset_ids"] = [str(x) for x in data["reference_asset_ids"]]
@@ -375,7 +478,11 @@ async def duplicate_scene(db: AsyncSession, project: Project, scene_id: uuid.UUI
 
 async def delete_scene(db: AsyncSession, project: Project, scene_id: uuid.UUID) -> None:
     scene = await get_scene(db, project, scene_id)
-    if scene.status in (SceneStatus.generating.value, SceneStatus.processing.value, SceneStatus.downloading.value):
+    if scene.status in (
+        SceneStatus.generating.value,
+        SceneStatus.processing.value,
+        SceneStatus.downloading.value,
+    ):
         raise ConflictError("This scene is currently being generated")
     await db.delete(scene)
     await db.flush()
@@ -394,7 +501,13 @@ async def reorder_scenes(db: AsyncSession, project: Project, scene_ids: list[uui
     return await list_scenes(db, project.id)
 
 
-async def analysis_context_for(db: AsyncSession, project: Project, *, clip_duration: float | None = None, target_duration: float | None = None) -> AnalysisContext:
+async def analysis_context_for(
+    db: AsyncSession,
+    project: Project,
+    *,
+    clip_duration: float | None = None,
+    target_duration: float | None = None,
+) -> AnalysisContext:
     characters = await list_characters(db, project.id)
     settings = get_settings()
     output = project.output_settings or {}
@@ -408,7 +521,14 @@ async def analysis_context_for(db: AsyncSession, project: Project, *, clip_durat
         clip_duration_seconds=clip,
         target_duration_seconds=target_duration or output.get("total_duration_seconds"),
         max_scenes=settings.max_scenes_per_task,
-        characters=[{"name": c.name, "description": c.description, "reference_asset_id": str(c.reference_asset_id) if c.reference_asset_id else None} for c in characters],
+        characters=[
+            {
+                "name": c.name,
+                "description": c.description,
+                "reference_asset_id": str(c.reference_asset_id) if c.reference_asset_id else None,
+            }
+            for c in characters
+        ],
         aspect_ratio=output.get("aspect_ratio") or "16:9",
         platform_name=adapter_cls.name if adapter_cls else project.platform_key,
     )
@@ -420,8 +540,14 @@ async def regenerate_scene_prompt(db: AsyncSession, project: Project, scene_id: 
     scene = await get_scene(db, project, scene_id)
     ctx = await analysis_context_for(db, project)
     draft = SceneDraft(
-        title=scene.title, duration_seconds=scene.duration_seconds, characters=list(scene.characters), location=scene.location,
-        visual=scene.visual, camera=scene.camera, dialogue=scene.dialogue, narration=scene.narration,
+        title=scene.title,
+        duration_seconds=scene.duration_seconds,
+        characters=list(scene.characters),
+        location=scene.location,
+        visual=scene.visual,
+        camera=scene.camera,
+        dialogue=scene.dialogue,
+        narration=scene.narration,
     )
     llm = build_llm_client(llm_overrides_for(await _org_for(db, project)))
     new_prompt = None
@@ -429,8 +555,14 @@ async def regenerate_scene_prompt(db: AsyncSession, project: Project, scene_id: 
         try:
             response = await llm.complete(
                 [
-                    LLMMessage("system", "You write concise, vivid prompts for AI video generators. Reply with the prompt text only."),
-                    LLMMessage("user", f"Style: {ctx.visual_style}. Duration {scene.duration_seconds}s. Characters: {ctx.characters}. Scene: {draft.to_dict()}"),
+                    LLMMessage(
+                        "system",
+                        "You write concise, vivid prompts for AI video generators. Reply with the prompt text only.",
+                    ),
+                    LLMMessage(
+                        "user",
+                        f"Style: {ctx.visual_style}. Duration {scene.duration_seconds}s. Characters: {ctx.characters}. Scene: {draft.to_dict()}",
+                    ),
                 ],
                 max_tokens=600,
             )
@@ -448,13 +580,24 @@ async def _org_for(db: AsyncSession, project: Project):
     return await db.get(Organization, project.organization_id)
 
 
-async def run_script_analysis(db: AsyncSession, project: Project, *, script_text: str | None, clip_duration: float | None, target_duration: float | None, replace_existing: bool, use_llm: bool | None) -> tuple[AnalysisResult, list[Scene]]:
+async def run_script_analysis(
+    db: AsyncSession,
+    project: Project,
+    *,
+    script_text: str | None,
+    clip_duration: float | None,
+    target_duration: float | None,
+    replace_existing: bool,
+    use_llm: bool | None,
+) -> tuple[AnalysisResult, list[Scene]]:
     if script_text is not None:
         project.script_text = script_text
         _write_script_copy(project)
     if not (project.script_text or "").strip():
         raise ValidationFailed("Add a script before analysing it")
-    ctx = await analysis_context_for(db, project, clip_duration=clip_duration, target_duration=target_duration)
+    ctx = await analysis_context_for(
+        db, project, clip_duration=clip_duration, target_duration=target_duration
+    )
     if clip_duration or target_duration:
         output = dict(project.output_settings or {})
         if clip_duration:

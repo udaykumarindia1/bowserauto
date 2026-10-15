@@ -78,7 +78,9 @@ class AdapterContext:
     generation_timeout_seconds: int = 900
     action_timeout_ms: int = 30_000
     options: dict[str, Any] = field(default_factory=dict)
-    run_agent: Callable[[str, dict[str, Any] | None], Awaitable[dict[str, Any]]] | None = None  # LLM generic agent for a sub-goal
+    run_agent: Callable[[str, dict[str, Any] | None], Awaitable[dict[str, Any]]] | None = (
+        None  # LLM generic agent for a sub-goal
+    )
     state_callback: Callable[[GenerationState, str], Awaitable[None]] | None = None
     attempt: int = 1
 
@@ -99,7 +101,9 @@ class RetryPolicy:
     max_backoff_seconds: float = 120.0
 
     def delay_for(self, attempt: int) -> float:
-        return min(self.max_backoff_seconds, self.backoff_seconds * (self.backoff_multiplier ** max(0, attempt - 1)))
+        return min(
+            self.max_backoff_seconds, self.backoff_seconds * (self.backoff_multiplier ** max(0, attempt - 1))
+        )
 
 
 class PlatformAdapter:
@@ -117,16 +121,31 @@ class PlatformAdapter:
     notes: ClassVar[str] = ""
     verified: ClassVar[bool] = False  # selectors validated against the live site recently
     supported_actions: ClassVar[list[str]] = ["generate", "upload_reference", "download", "detect_state"]
-    capabilities: ClassVar[dict[str, Any]] = {"max_clip_seconds": 8, "aspect_ratios": ["16:9", "9:16", "1:1"], "reference_images": True, "negative_prompt": False}
+    capabilities: ClassVar[dict[str, Any]] = {
+        "max_clip_seconds": 8,
+        "aspect_ratios": ["16:9", "9:16", "1:1"],
+        "reference_images": True,
+        "negative_prompt": False,
+    }
 
     # Target specs; each entry may be a single spec or {"any": [...]}
     selectors: ClassVar[dict[str, TargetSpec]] = {}
     # Regex patterns (case-insensitive) matched against the visible page text.
     status_patterns: ClassVar[dict[str, list[str]]] = {
         GenerationState.QUEUED.value: [r"\bqueued\b", r"in queue", r"waiting in line"],
-        GenerationState.GENERATING.value: [r"\bgenerating\b", r"creating your video", r"rendering", r"\b\d{1,3}%"],
+        GenerationState.GENERATING.value: [
+            r"\bgenerating\b",
+            r"creating your video",
+            r"rendering",
+            r"\b\d{1,3}%",
+        ],
         GenerationState.PROCESSING.value: [r"\bprocessing\b", r"finalizing", r"finalising", r"upscaling"],
-        GenerationState.COMPLETED.value: [r"generation complete", r"video is ready", r"\bcompleted\b", r"\bready to download"],
+        GenerationState.COMPLETED.value: [
+            r"generation complete",
+            r"video is ready",
+            r"\bcompleted\b",
+            r"\bready to download",
+        ],
     }
     error_patterns: ClassVar[list[str]] = [
         r"generation failed",
@@ -140,7 +159,14 @@ class PlatformAdapter:
         r"quota exceeded",
         r"rate limit",
     ]
-    non_retryable_error_patterns: ClassVar[list[str]] = [r"content policy", r"violat(?:es|ion)", r"insufficient credits", r"out of credits", r"quota exceeded", r"upgrade your plan"]
+    non_retryable_error_patterns: ClassVar[list[str]] = [
+        r"content policy",
+        r"violat(?:es|ion)",
+        r"insufficient credits",
+        r"out of credits",
+        r"quota exceeded",
+        r"upgrade your plan",
+    ]
     human_check_patterns: ClassVar[list[str]] = [
         r"verify (?:that )?you(?:'re| are) (?:a )?human",
         r"\bcaptcha\b",
@@ -153,8 +179,20 @@ class PlatformAdapter:
         r"confirm it'?s you",
         r"accept (?:all )?cookies",
     ]
-    login_patterns: ClassVar[list[str]] = [r"\bsign in\b", r"\blog in\b", r"\blogin\b", r"continue with google", r"create (?:an )?account"]
-    login_url_patterns: ClassVar[list[str]] = [r"/login", r"/signin", r"/sign-in", r"accounts\.google\.com", r"/auth"]
+    login_patterns: ClassVar[list[str]] = [
+        r"\bsign in\b",
+        r"\blog in\b",
+        r"\blogin\b",
+        r"continue with google",
+        r"create (?:an )?account",
+    ]
+    login_url_patterns: ClassVar[list[str]] = [
+        r"/login",
+        r"/signin",
+        r"/sign-in",
+        r"accounts\.google\.com",
+        r"/auth",
+    ]
     retry_policy: ClassVar[RetryPolicy] = RetryPolicy()
     poll_interval_seconds: ClassVar[float] = 2.0
     stall_timeout_seconds: ClassVar[int] = 240  # how long UNKNOWN state is tolerated before probing
@@ -184,7 +222,12 @@ class PlatformAdapter:
         return override or self.selectors.get(name)
 
     def start_url(self) -> str:
-        return self.config.get("generation_url") or self.generation_url or self.config.get("base_url") or self.base_url
+        return (
+            self.config.get("generation_url")
+            or self.generation_url
+            or self.config.get("base_url")
+            or self.base_url
+        )
 
     # ------------------------------------------------------------- full workflow
     async def generate(self, ctx: AdapterContext, target_dir: Path) -> GenerationOutcome:
@@ -211,7 +254,12 @@ class PlatformAdapter:
         await ctx.set_state(GenerationState.DOWNLOAD_READY, "output ready")
         download = await self.download_result(ctx, target_dir)
         await ctx.set_state(GenerationState.SUCCESS, "downloaded")
-        return GenerationOutcome(download=download, output_kind=self.output_kind, generation_seconds=generation_seconds, details={"total_seconds": time.monotonic() - started})
+        return GenerationOutcome(
+            download=download,
+            output_kind=self.output_kind,
+            generation_seconds=generation_seconds,
+            details={"total_seconds": time.monotonic() - started},
+        )
 
     # ------------------------------------------------------------ workflow steps
     async def ensure_ready(self, ctx: AdapterContext) -> None:
@@ -228,15 +276,23 @@ class PlatformAdapter:
         text = await ctx.driver.page_text(15_000)
         url = await ctx.driver.url()
         if await self.detect_human_check(ctx, text):
-            raise HumanInterventionRequired("The site is showing a verification challenge (CAPTCHA/MFA/consent). Please complete it manually.")
+            raise HumanInterventionRequired(
+                "The site is showing a verification challenge (CAPTCHA/MFA/consent). Please complete it manually."
+            )
         if await self.detect_login_required(ctx, text, url):
-            raise LoginRequired(f"{self.name} requires you to log in. Open the browser session, sign in, then resume the task.")
+            raise LoginRequired(
+                f"{self.name} requires you to log in. Open the browser session, sign in, then resume the task."
+            )
 
     async def detect_human_check(self, ctx: AdapterContext, text: str | None = None) -> bool:
         text = text if text is not None else await ctx.driver.page_text(15_000)
-        return _matches_any(text, self.human_check_patterns) or await _exists(ctx, self.selector("human_check"))
+        return _matches_any(text, self.human_check_patterns) or await _exists(
+            ctx, self.selector("human_check")
+        )
 
-    async def detect_login_required(self, ctx: AdapterContext, text: str | None = None, url: str | None = None) -> bool:
+    async def detect_login_required(
+        self, ctx: AdapterContext, text: str | None = None, url: str | None = None
+    ) -> bool:
         if not self.requires_login:
             return False
         text = text if text is not None else await ctx.driver.page_text(15_000)
@@ -269,7 +325,10 @@ class PlatformAdapter:
             await ctx.driver.upload(spec, ctx.scene.reference_files)
         except ElementNotFound:
             if ctx.run_agent:
-                await ctx.run_agent("Upload the reference image(s) using the page's upload control.", {"files": [str(f) for f in ctx.scene.reference_files]})
+                await ctx.run_agent(
+                    "Upload the reference image(s) using the page's upload control.",
+                    {"files": [str(f) for f in ctx.scene.reference_files]},
+                )
             else:
                 raise
         await asyncio.sleep(1.0)
@@ -281,7 +340,10 @@ class PlatformAdapter:
             await ctx.driver.type(spec, ctx.scene.prompt)
         except ElementNotFound:
             if ctx.run_agent:
-                await ctx.run_agent("Find the prompt text box and enter the prompt exactly as given.", {"prompt": ctx.scene.prompt})
+                await ctx.run_agent(
+                    "Find the prompt text box and enter the prompt exactly as given.",
+                    {"prompt": ctx.scene.prompt},
+                )
             else:
                 raise
         neg = self.selector("negative_prompt_input")
@@ -310,7 +372,9 @@ class PlatformAdapter:
             await ctx.say(f"Could not apply setting '{value}'; continuing with platform defaults")
 
     async def start_generation(self, ctx: AdapterContext) -> None:
-        spec = self.selector("generate_button") or {"any": [{"role": "button", "name": "/generate|create|run|submit/i"}]}
+        spec = self.selector("generate_button") or {
+            "any": [{"role": "button", "name": "/generate|create|run|submit/i"}]
+        }
         await ctx.say("Generation button detected, starting generation")
         try:
             await ctx.driver.click(spec, timeout_ms=ctx.action_timeout_ms)
@@ -334,7 +398,12 @@ class PlatformAdapter:
             return GenerationState.DOWNLOAD_READY, "download control visible"
         if await _exists(ctx, self.selector("result_video")):
             return GenerationState.COMPLETED, "result video visible"
-        for state_name in (GenerationState.COMPLETED.value, GenerationState.PROCESSING.value, GenerationState.GENERATING.value, GenerationState.QUEUED.value):
+        for state_name in (
+            GenerationState.COMPLETED.value,
+            GenerationState.PROCESSING.value,
+            GenerationState.GENERATING.value,
+            GenerationState.QUEUED.value,
+        ):
             match = _first_match(text, self.status_patterns.get(state_name, []))
             if match:
                 return GenerationState(state_name), match
@@ -350,7 +419,9 @@ class PlatformAdapter:
         while True:
             await ctx.control.checkpoint()
             if time.monotonic() > deadline:
-                raise GenerationTimeout(f"Generation did not finish within {ctx.generation_timeout_seconds} seconds")
+                raise GenerationTimeout(
+                    f"Generation did not finish within {ctx.generation_timeout_seconds} seconds"
+                )
             try:
                 state, detail = await self.detect_state(ctx)
             except AutomationError:
@@ -361,7 +432,13 @@ class PlatformAdapter:
             if state != last_state:
                 await ctx.set_state(state, detail)
                 if state in (GenerationState.QUEUED, GenerationState.GENERATING, GenerationState.PROCESSING):
-                    await ctx.say({"QUEUED": "Request is queued on the platform", "GENERATING": "Video is being generated", "PROCESSING": "Video is still processing"}[state.value])
+                    await ctx.say(
+                        {
+                            "QUEUED": "Request is queued on the platform",
+                            "GENERATING": "Video is being generated",
+                            "PROCESSING": "Video is still processing",
+                        }[state.value]
+                    )
                 last_state = state
             if state in (GenerationState.COMPLETED, GenerationState.DOWNLOAD_READY, GenerationState.SUCCESS):
                 await ctx.say("Generation completed")
@@ -370,7 +447,9 @@ class PlatformAdapter:
                 retryable = not _matches_any(detail, self.non_retryable_error_patterns)
                 raise GenerationFailed(f"The platform reported a failure: {detail}", retryable=retryable)
             if state == GenerationState.WAITING_FOR_HUMAN:
-                raise HumanInterventionRequired("The platform is asking for human verification. Take over the browser to complete it.")
+                raise HumanInterventionRequired(
+                    "The platform is asking for human verification. Take over the browser to complete it."
+                )
             if state == GenerationState.BLOCKED:
                 raise GenerationFailed(f"Generation blocked: {detail}", retryable=False)
             if state == GenerationState.UNKNOWN:
@@ -384,7 +463,12 @@ class PlatformAdapter:
             now = time.monotonic()
             if now - last_progress_log > 30:
                 last_progress_log = now
-                await ctx.log(f"Waiting for generation ({state.value.lower()})", level="debug", event_type="task.progress", state=state.value)
+                await ctx.log(
+                    f"Waiting for generation ({state.value.lower()})",
+                    level="debug",
+                    event_type="task.progress",
+                    state=state.value,
+                )
             await ctx.control.sleep(interval)
             interval = min(interval * 1.2, 6.0)
 
@@ -408,11 +492,17 @@ class PlatformAdapter:
         if result is not None:
             return result
         if ctx.run_agent:
-            info = await ctx.run_agent("Download the generated video using the page's download control.", None)
+            info = await ctx.run_agent(
+                "Download the generated video using the page's download control.", None
+            )
             path = info.get("download_path")
             if path and Path(path).exists():
-                return DownloadResult(path=Path(path), suggested_filename=Path(path).name, size_bytes=Path(path).stat().st_size)
-        raise DownloadFailed(f"Could not download the generated output ({last_error or 'no download control found'})")
+                return DownloadResult(
+                    path=Path(path), suggested_filename=Path(path).name, size_bytes=Path(path).stat().st_size
+                )
+        raise DownloadFailed(
+            f"Could not download the generated output ({last_error or 'no download control found'})"
+        )
 
     async def download_via_media_src(self, ctx: AdapterContext, target_dir: Path) -> DownloadResult | None:
         fetch = getattr(ctx.driver, "fetch_to_file", None)

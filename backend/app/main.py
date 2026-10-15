@@ -42,7 +42,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             # The mock site is loaded inside the automated browser; it may embed its own assets.
             response.headers["X-Frame-Options"] = "SAMEORIGIN"
         elif request.url.path.startswith("/api"):
-            response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+            response.headers.setdefault(
+                "Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"
+            )
             response.headers.setdefault("Cache-Control", "no-store")
         if get_settings().cookies_secure:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -57,17 +59,43 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
         started = time.perf_counter()
-        if request.url.path.startswith("/api") and not request.url.path.startswith(("/api/ws", "/api/events", "/api/health")):
+        if request.url.path.startswith("/api") and not request.url.path.startswith(
+            ("/api/ws", "/api/events", "/api/health")
+        ):
             from app.core.deps import client_ip
 
-            allowed, retry_after = await get_rate_limiter().hit(f"general:{client_ip(request)}", settings.rate_limit_per_minute)
+            allowed, retry_after = await get_rate_limiter().hit(
+                f"general:{client_ip(request)}", settings.rate_limit_per_minute
+            )
             if not allowed:
-                return JSONResponse({"error": {"code": "rate_limited", "message": "Too many requests", "details": {"retry_after": retry_after}}}, status_code=429, headers={"Retry-After": str(retry_after)})
+                return JSONResponse(
+                    {
+                        "error": {
+                            "code": "rate_limited",
+                            "message": "Too many requests",
+                            "details": {"retry_after": retry_after},
+                        }
+                    },
+                    status_code=429,
+                    headers={"Retry-After": str(retry_after)},
+                )
         try:
             response = await call_next(request)
         except Exception:
-            logger.exception("Unhandled error", extra={"action": f"{request.method} {request.url.path}", "request_id": request_id})
-            return JSONResponse({"error": {"code": "internal_error", "message": "Internal server error", "details": {"request_id": request_id}}}, status_code=500)
+            logger.exception(
+                "Unhandled error",
+                extra={"action": f"{request.method} {request.url.path}", "request_id": request_id},
+            )
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": "internal_error",
+                        "message": "Internal server error",
+                        "details": {"request_id": request_id},
+                    }
+                },
+                status_code=500,
+            )
         duration_ms = int((time.perf_counter() - started) * 1000)
         response.headers["X-Request-ID"] = request_id
         if not request.url.path.startswith(("/api/health", "/mock-platform")):
@@ -77,7 +105,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 request.url.path,
                 response.status_code,
                 duration_ms,
-                extra={"action": f"{request.method} {request.url.path}", "result": response.status_code, "duration_ms": duration_ms, "request_id": request_id},
+                extra={
+                    "action": f"{request.method} {request.url.path}",
+                    "result": response.status_code,
+                    "duration_ms": duration_ms,
+                    "request_id": request_id,
+                },
             )
         return response
 
@@ -99,8 +132,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.workers.main import start_embedded_worker
 
         worker = await start_embedded_worker()
-        logger.info("Embedded worker started (set REDIS_URL + run `python -m app.workers.main` for separate workers)")
-    logger.info("%s API ready (env=%s, db=%s, bus=%s)", settings.app_name, settings.app_env, settings.sqlalchemy_database_url.split("://")[0], "redis" if settings.redis_url else "memory")
+        logger.info(
+            "Embedded worker started (set REDIS_URL + run `python -m app.workers.main` for separate workers)"
+        )
+    logger.info(
+        "%s API ready (env=%s, db=%s, bus=%s)",
+        settings.app_name,
+        settings.app_env,
+        settings.sqlalchemy_database_url.split("://")[0],
+        "redis" if settings.redis_url else "memory",
+    )
     try:
         yield
     finally:
@@ -145,13 +186,19 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-        errors = [{"loc": [str(p) for p in e.get("loc", [])], "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
+        errors = [
+            {"loc": [str(p) for p in e.get("loc", [])], "msg": e.get("msg"), "type": e.get("type")}
+            for e in exc.errors()
+        ]
         message = errors[0]["msg"] if errors else "Invalid request"
         if errors and errors[0]["loc"]:
             field = ".".join(p for p in errors[0]["loc"] if p not in ("body", "query", "path"))
             if field:
                 message = f"{field}: {message}"
-        return JSONResponse({"error": {"code": "validation_error", "message": message, "details": {"errors": errors}}}, status_code=422)
+        return JSONResponse(
+            {"error": {"code": "validation_error", "message": message, "details": {"errors": errors}}},
+            status_code=422,
+        )
 
     app.include_router(api_router)
     if not settings.is_production or settings.mock_platform_url:
@@ -161,7 +208,12 @@ def create_app() -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict:
-        return {"name": settings.app_name, "status": "ok", "api": "/api", "docs": "/api/docs" if not settings.is_production else None}
+        return {
+            "name": settings.app_name,
+            "status": "ok",
+            "api": "/api",
+            "docs": "/api/docs" if not settings.is_production else None,
+        }
 
     return app
 
