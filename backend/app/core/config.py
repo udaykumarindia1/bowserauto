@@ -84,7 +84,8 @@ class Settings(BaseSettings):
 
     # ------------------------------------------------------------------ storage
     data_dir: Path = Path("./data")
-    max_upload_size_mb: int = 50
+    max_upload_size_mb: int = Field(default=50, ge=1, le=4095)
+    max_request_body_mb: int = Field(default=64, ge=2, le=4096)
     max_generated_file_size_mb: int = 2048
     max_storage_per_org_mb: int = Field(default=51_200, ge=1)
     allowed_upload_extensions: Annotated[list[str], NoDecode] = Field(
@@ -202,6 +203,12 @@ class Settings(BaseSettings):
     @classmethod
     def _empty_mock_url_is_none(cls, value):  # noqa: ANN001
         return None if value is None or (isinstance(value, str) and not value.strip()) else value
+
+    @model_validator(mode="after")
+    def _validate_request_body_limit(self) -> Settings:
+        if self.max_request_body_mb <= self.max_upload_size_mb:
+            raise ValueError("MAX_REQUEST_BODY_MB must exceed MAX_UPLOAD_SIZE_MB to allow multipart overhead")
+        return self
 
     @model_validator(mode="after")
     def _validate_production(self) -> Settings:

@@ -20,6 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import api_router
+from app.core.body_limit import RequestBodySizeLimitMiddleware
 from app.core.config import get_settings
 from app.core.database import dispose_engine, init_db, session_scope, wait_for_database
 from app.core.errors import AppError
@@ -165,6 +166,10 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url=None if settings.is_production else "/api/openapi.json",
         lifespan=lifespan,
+    )
+    app.add_middleware(
+        RequestBodySizeLimitMiddleware,
+        max_bytes=settings.max_request_body_mb * 1024 * 1024,
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestContextMiddleware)

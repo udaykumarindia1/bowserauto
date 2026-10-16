@@ -8,7 +8,7 @@ import pytest
 from starlette.requests import Request
 
 from app.core import deps
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.core.url_safety import BrowserURLPolicy, UnsafeDestination, sanitize_text, sanitize_url
 from tests.conftest import ApiClient
 
@@ -44,6 +44,13 @@ def test_production_settings_require_https_and_explicit_trust() -> None:
         )
 
 
+def test_request_body_limit_must_allow_multipart_overhead() -> None:
+    settings = Settings(max_upload_size_mb=50, max_request_body_mb=64)
+    assert settings.max_request_body_mb > settings.max_upload_size_mb
+    with pytest.raises(ValueError, match="must exceed MAX_UPLOAD_SIZE_MB"):
+        Settings(max_upload_size_mb=50, max_request_body_mb=50)
+
+
 def test_url_sanitizer_removes_query_fragment_credentials_and_signed_path_tokens() -> None:
     sanitized = sanitize_url("https://user:password@example.test/reports/signed/abc.def?token=secret#frag")
     assert sanitized == "https://example.test/reports/signed/[redacted]"
@@ -62,6 +69,20 @@ async def test_signed_download_tokens_are_redacted_from_access_logs(
     assert response.status_code in (400, 404)
     assert secret_token not in caplog.text
     assert "/api/files/signed/[redacted]" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_request_body_limit_is_installed_and_keeps_common_headers(client: ApiClient) -> None:
+    limit = get_settings().max_request_body_mb * 1024 * 1024
+    response = await client.post(
+        "/api/auth/login",
+        content=b"{}",
+        headers={"Content-Length": str(limit + 1)},
+    )
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "payload_too_large"
+    assert response.headers.get("X-Request-ID")
+    assert response.headers.get("X-Content-Type-Options") == "nosniff"
 
 
 @pytest.mark.asyncio

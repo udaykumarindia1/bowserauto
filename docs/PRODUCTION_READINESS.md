@@ -2,8 +2,9 @@
 
 This document records implementation-phase verification from the original build; it is **not**
 a production-readiness certification. "Verified" below means exercised in this repository by
-automated tests or the smoke scripts (real Chromium against the built-in mock platform) — never
-against real AI platforms. The project/repository audit dated 2026-10-16 is in
+automated tests or smoke scripts. Automated backend tests use the fake browser; separate smoke
+scripts can exercise real Chromium against the built-in mock platform, but do not contact real AI
+platforms. The project/repository audit dated 2026-10-16 is in
 [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) and documents unresolved high-priority risks. Production
 readiness is **not certified** until those findings are addressed and re-tested.
 
@@ -40,7 +41,7 @@ and smoke-test entries do not imply exhaustive route coverage or a production-sa
 
 | Check | Result |
 | --- | --- |
-| API surface inventoried | 101 operations in `/api/openapi.json`; exercised by a subset of backend tests and smoke scripts (not exhaustive route coverage) |
+| API surface inventoried | Current OpenAPI lists 114 operations across 88 `/api` paths; exercised by a subset of backend tests and smoke scripts (not exhaustive route coverage) |
 | Live browser viewer streams at usable framerate | CDP screencast frames (JPEG, throttled to `STREAM_MAX_FPS` with the latest frame always flushed, `STREAM_QUALITY`) over the authenticated WebSocket; verified in UI flow |
 | Human takeover works | pause → `waiting_for_human` + `human_control` → user input relayed → release re-inspects state → `running` (`test_login_wall_takeover_and_release`, UI flow) |
 | Queue persistence and resume | DB-backed; running tasks re-queued after worker death (`test_tasks_survive_worker_restart`) |
@@ -49,13 +50,13 @@ and smoke-test entries do not imply exhaustive route coverage or a production-sa
 | Retry logic | bounded exponential backoff, then `needs_attention` with Retry/Edit/Skip/Take over (`test_retry_policy_backoff_is_bounded`, queue tests) |
 | STOP EVERYTHING | `POST /api/tasks/stop-all` + assistant confirm gate (`test_stop_everything`) |
 | Auth/authz, tenant isolation | cookie + CSRF, roles, org scoping on every query (`test_tenant_isolation` ×2, `test_viewer_role_is_read_only`, `test_viewer_role_cannot_control_browser`) |
-| Secrets never exposed | browser storage state Fernet-encrypted at rest, never serialized in API responses; organization LLM keys are encrypted and never echoed (only a fixed redaction placeholder and presence flag are returned); memory refuses secrets |
+| Secrets never exposed | Serialized browser storage-state snapshots are Fernet-encrypted and not returned by APIs; organization LLM keys are encrypted and never echoed; memory refuses secret-like values. **Active Chromium profile files are not application-encrypted**; see the explicit caveat in `ROADMAP_STATUS.md` and `SECURITY.md`. |
 | WebSocket auth | unauthenticated `/api/ws` closed with 4401 (`test_websocket_requires_authentication`) |
 | No silent task death | every exception path sets `failed`/`needs_attention` with `error` + activity event; stale tasks re-queued |
 | Observability | structured logs with task/session ids and durations; `X-Request-ID`; activity + audit tables |
 | Cost/limits | server ceilings + per-org limits (duration, retries, scenes, concurrency, sessions, file size, rate limit) enforced (`test_task_limits_enforced`, `test_settings_limits_and_members`) |
 | LLM provider safety | OpenAI-compatible, Gemini, Ollama and Anthropic adapters tested with mocked transports; org-selected endpoints cannot inherit the server API key; provider URL restrictions and the admin-only connection test are covered by tests |
-| Lint/type/test gates | Current verification: Ruff check/format, pytest (131 passed), `tsc --noEmit`, `eslint src`, `next build`, `npm audit --audit-level=high` (zero vulnerabilities) |
+| Lint/type/test gates | Current verification: Ruff check/format, pytest (137 passed), `tsc --noEmit`, `eslint src`, `next build`, `npm audit --audit-level=high` (zero vulnerabilities) |
 | Docker Compose | frontend, backend, worker, browser-worker, postgres, redis (+ optional nginx), health checks on all services. Written and syntax-validated; **not executed in the authoring sandbox (no Docker daemon)** — run `docker compose up` once on the target host before go-live |
 
 ## Bugs found and fixed during the audit

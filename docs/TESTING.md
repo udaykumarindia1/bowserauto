@@ -11,25 +11,35 @@
 * Suites are serial on purpose: the embedded worker launches (fake) browsers; running pytest in
   parallel with other heavy processes makes session start-up timeouts flaky.
 
-## Backend suite (97 collected pytest cases from 72 test functions; verified 2026-10-16)
+## Backend suite (137 collected pytest cases across 16 modules; verified 2026-10-16)
 
 ```bash
 cd backend && source ../.venv/bin/activate
-timeout 900 python -m pytest -q            # whole suite (recent audit run: 52.51 s; varies by host)
+timeout 900 python -m pytest -q            # whole suite; runtime varies by host
 python -m pytest -q tests/test_queue.py    # a single file
 ruff check app tests && ruff format --check app tests
 ```
 
-| File | Covers |
-| --- | --- |
-| `test_units.py` (14) | heuristic script parser (markers, free text, limits, target duration), adapter **state detection follows page state not timers**, timeouts instead of hangs, bounded retry backoff, scene filename patterns, safe filenames/path traversal, unique paths, MP4 verification (rejects HTML/truncated files), Argon2 + Fernet, signed payload expiry/tampering |
-| `test_auth.py` (10) | public status, register/login/logout, weak passwords, CSRF enforcement, error envelope + request id, **tenant isolation**, member roles, device sessions + revoke, change password, audit log |
-| `test_api.py` (10) | project CRUD + analysis, scene editing workflow (reorder/duplicate/delete/regenerate), assets/characters/export, generated files listing/deletion, templates/platforms/notifications/dashboard, settings limits + members, tenant isolation, CSRF/cookie protection, viewer read-only |
-| `test_queue.py` (8) | video task completes with verified files, retry with backoff then success, failure after retries → `needs_attention` → skip, pause/resume/stop, priority + reorder, **tasks survive worker restart**, STOP EVERYTHING, task limits |
-| `test_takeover.py` (6) | login wall → takeover → release, **verification challenge is never bypassed**, session lifecycle + limits, viewer cannot control browsers, WebSocket requires authentication, worker evicts the longest-idle unused browser when its slots are full (and reports the wait otherwise) |
-| `test_assistant.py` (31) | AVINASH command grammar, confirmations, memory (secret refusal), briefing, capabilities, role gating, navigation hints |
-| `test_agent.py` (5) | mocked vision/context handling and agent decision/tool validation; no live provider calls |
-| `test_llm.py` (13) | provider configuration/isolation, endpoint validation, mocked provider requests, redirects and authorization-header handling |
+| File | Cases | Covers |
+| --- | ---: | --- |
+| `test_units.py` | 14 | Script parsing, page-state detection (not timers), timeout/retry behavior, safe filenames, MP4 verification, Argon2/Fernet, signed payloads |
+| `test_auth.py` | 10 | Registration/login/logout, CSRF, tenant isolation, roles, device sessions, password change, audit log |
+| `test_api.py` | 10 | Projects/scenes/assets/export, templates/platforms/notifications/dashboard, limits and members, tenant and read-only checks |
+| `test_queue.py` | 8 | Task lifecycle/retries/controls, priority/reorder, worker restart recovery, stop-all and limits |
+| `test_takeover.py` | 6 | Manual takeover/release, verification challenge non-bypass, session limits, viewer permissions, WebSocket auth, worker slot recovery |
+| `test_assistant.py` | 31 | AVINASH commands, approvals, memory/secret refusal, briefing, capabilities, role gating, navigation hints |
+| `test_agent.py` | 6 | Mocked vision/context handling, agent decisions and tool validation; no live provider calls |
+| `test_llm.py` | 14 | Provider isolation, endpoint validation, mocked transports, redirects and authorization headers |
+| `test_action_approval.py` | 9 | Authenticated one-shot decisions, compare-and-set, rejection/cancellation, pending-preview redaction and policy changes |
+| `test_adapter_approval.py` | 5 | Adapter-native driver approval gates and rejection preventing browser operations |
+| `test_device_pairings.py` | 4 | Pairing expiry, approval, one-time exchange and session revocation |
+| `test_media_streaming.py` | 2 | Bounded media/download and export streaming behavior |
+| `test_schedules.py` | 3 | Schedule policy validation and due-run dispatch behavior |
+| `test_security_hardening.py` | 9 | Production configuration, request-size configuration/integration, URL redaction/policy, signed-token log redaction, trusted proxies and mock-router isolation |
+| `test_storage_quota.py` | 2 | Organization storage cap configuration and upload enforcement |
+| `test_request_body_limit.py` | 4 | Declared and chunked request-size limits, exact-boundary acceptance and ambiguous Content-Length rejection |
+
+All automated browser interactions use the fake driver. The suite uses mocked LLM transports and does not call real AI providers or third-party platforms.
 
 Useful filter for the noisy aiosqlite cancellation traces:
 

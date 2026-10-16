@@ -44,7 +44,9 @@ checks still require an operator-controlled environment.
   runs, skip missed intervals instead of backfilling and defer when queue capacity is full.
 - Organization storage caps are configurable (default 50 GiB), enforced on selected uploads and
   generated outputs, with warning/activity events at 80%. Project ZIP exports and media fallback
-  downloads stream from disk/in bounded chunks.
+  downloads stream from disk/in bounded chunks. A 64 MiB application-level request-body cap
+  (configurable above the per-file upload limit) rejects declared and chunked oversized requests;
+  the trusted ingress should still enforce its own cap.
 - `scripts/backup.sh` creates GPG-encrypted PostgreSQL and persistent-data backups, pauses app
   writers during the snapshot and applies retention. It is operator-run; Docker/GPG execution,
   restore drills, offsite delivery and key custody remain unverified/operator responsibilities.
@@ -92,7 +94,7 @@ checks still require an operator-controlled environment.
 
 ## Verification and remaining deployment work
 
-- Backend: Ruff check/format plus the full automated suite pass (131 tests); tests use SQLite, mocked LLM
+- Backend: Ruff check/format plus the full automated suite pass (137 tests); tests use SQLite, mocked LLM
   transports and fake browser interactions. No real AI generation is called.
 - Frontend: `npm ci`, lint, TypeScript typecheck, production build and `npm audit --audit-level=high`
   pass with zero reported npm vulnerabilities.

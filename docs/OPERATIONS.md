@@ -11,7 +11,7 @@ for development only). `APP_ENV` selects the profile:
 | Bus / workers | in-memory bus, embedded worker in the API | in-memory, fake browser | Redis + separate workers | Redis + separate workers (`EMBEDDED_WORKER=false`) |
 | Cookies | not Secure | – | Secure | Secure |
 | Secrets | dev defaults allowed | – | real | `SECRET_KEY` ≥ 32 chars + `ENCRYPTION_KEY` enforced |
-| Mock platform | enabled | enabled | enabled | enabled but hidden from Settings (`mock_platform_url` null); disable the `mock` platform per org if desired |
+| Mock platform | enabled | enabled | enabled | disabled; the mock router is not mounted and production refuses a configured `MOCK_PLATFORM_URL` |
 | Logs | text | text | JSON | JSON (`LOG_JSON=true`) |
 
 Key variables (full list with comments: `backend/.env.example`, compose: `.env.example`):
@@ -21,8 +21,9 @@ MAX_CONCURRENT_TASKS_PER_WORKER, MAX_OPEN_SESSIONS_PER_WORKER, SESSION_INTERACTI
 STREAM_QUALITY, MOCK_PLATFORM_URL, LLM_PROVIDER/LLM_API_KEY/LLM_MODEL/LLM_BASE_URL,
 LLM_TIMEOUT_SECONDS/LLM_ALLOWED_HOSTS/AGENT_USE_VISION, SMTP_*, TELEGRAM_*, NOTIFICATION_WEBHOOK_URL,
 MAX_TASK_DURATION_SECONDS, MAX_RETRIES_LIMIT,
-MAX_SCENES_PER_TASK, MAX_BROWSER_SESSIONS_PER_ORG, MAX_GENERATED_FILE_SIZE_MB,
-MAX_STORAGE_PER_ORG_MB, MAX_SCHEDULED_WORKFLOWS_PER_ORG, RATE_LIMIT_PER_MINUTE,
+MAX_SCENES_PER_TASK, MAX_BROWSER_SESSIONS_PER_ORG, MAX_UPLOAD_SIZE_MB, MAX_REQUEST_BODY_MB,
+MAX_GENERATED_FILE_SIZE_MB, MAX_STORAGE_PER_ORG_MB, MAX_SCHEDULED_WORKFLOWS_PER_ORG,
+RATE_LIMIT_PER_MINUTE,
 SIGNED_URL_TTL_SECONDS`.
 
 ## Docker Compose
@@ -75,6 +76,12 @@ usage before entering tenant storage. The dashboard reports use/limit, and cross
 in-app notification plus a `storage.quota_warning` activity event. External email/webhook delivery
 requires configuring notification channels. Temporary `.incoming` downloads are excluded from the
 persistent quota until verified and committed.
+
+`MAX_UPLOAD_SIZE_MB` limits an individual uploaded file (default 50 MiB). The ASGI request-body
+limit `MAX_REQUEST_BODY_MB` (default 64 MiB) covers the full request, including multipart framing;
+it must be greater than the per-file limit. Declared lengths are rejected before parsing, and
+streamed/chunked request bodies are counted as they arrive. Keep an independent size cap at the
+trusted ingress as defense in depth.
 
 ## Upgrades
 

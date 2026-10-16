@@ -44,10 +44,10 @@ customisable colours and assistant name) that ports the *functionality* of
 | Multi-tenancy & security | Organisations, roles (owner/admin/member/viewer), Argon2 passwords, HttpOnly cookie sessions + CSRF, rate limiting, audit log, Fernet-encrypted secrets, tenant-scoped queries, signed URLs, WS auth, production start-up guards |
 | Notifications | In-app + native browser notifications; email / Telegram / generic webhook (WhatsApp gateways, Slack) through env vars |
 | Observability | Structured logs (`timestamp, task_id, session_id, action, result, duration, error`), request IDs, activity + audit tables, health endpoint, worker liveness files |
-| Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, storage quota, timeouts) with server ceilings, 80% storage alerts, and pre-run estimates |
+| Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, storage quota, timeouts) with server ceilings, a streamed request-body cap, 80% storage alerts, and pre-run estimates |
 | Templates | Built-in (AI Video Generation, Image Generation, Research, Data Entry, Website Testing, Content Creation, Browser Workflow) + custom |
 | Dev mode | Built-in **Mock Video Generator** (`/mock-platform`) with configurable speed, failure rate, login and human-check simulation for end-to-end runs without AI credits |
-| Tests | 131 backend tests (including pairing/approval flows and mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
+| Tests | 137 backend tests (including body-size, pairing/approval flows and mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
 
 ---
 

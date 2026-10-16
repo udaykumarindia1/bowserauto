@@ -29,12 +29,19 @@ supersede their baseline status labels:
 | A-06 plaintext live profiles | **Open:** active Chromium profiles remain plaintext on the data volume. GPG backups do not encrypt the live profile. |
 | A-07 forwarded client IP | **Mitigated:** forwarded addresses are trusted only through configured proxy CIDRs. |
 | A-08 signed-token access logs | **Mitigated:** signed route tokens are redacted from request-path logs; regression test added. |
-| A-09 resource exhaustion | **Partially mitigated:** disk-backed ZIP streaming, bounded media streaming, staged uploads, per-file limits, and org storage quota. Multipart ingress limits and restore/deployment load tests remain. |
+| A-09 resource exhaustion | **Partially mitigated:** disk-backed ZIP streaming, bounded media streaming, staged uploads, per-file and organization quotas, plus a configurable app-level request-body cap that counts chunked uploads. Trusted-ingress caps, retention/cleanup policy, and restore/deployment load tests remain. |
 | A-10 cross-worker capacity | **Mitigated in PostgreSQL implementation:** organization row lock plus conditional claim. PostgreSQL multi-worker contention was not tested here. |
 | A-11 action policy | **Mitigated in application:** generic ToolRegistry and adapter-native BrowserDriver writes use the same approval controller; `confirm_all` also gates browser state changes. The explicit `never` mode and external-page semantics remain documented limitations. |
 | A-12 dependency advisories | **Mitigated at current resolution:** refreshed frontend dependencies and dependency-audit CI gate. Re-run audits against deployment locks before release. |
 | A-13 CI coverage | **Mitigated:** GitHub Actions runs backend lint/tests and frontend lint/typecheck/build/audit. A dedicated frontend unit suite remains absent. |
 | A-14 frontend headers | **Mitigated in Next/API configuration:** response security headers are configured. HTTPS/HSTS behavior still requires a live ingress check. |
+
+### Current branch verification
+
+- Backend: 137 collected tests pass, with Ruff check and format checks clean. Automated browser tests use the fake driver.
+- Frontend: lint, TypeScript, production build, and `npm audit --audit-level=high` pass; the current npm audit reports zero vulnerabilities.
+- CI workflow exists for backend tests/lint and frontend lint/typecheck/build/audit. A dedicated frontend unit/integration suite remains absent.
+- Body-size limits are now covered for declared and chunked request bodies. This does not replace a trusted-ingress limit or a real deployment load test.
 
 ## Severity and status
 
@@ -224,7 +231,12 @@ The repository scan found no CI workflow/configuration and no frontend test/spec
 
 These controls reduce risk but do not offset the unresolved release blockers.
 
-## Prioritized enhancement options
+## Original audit recommendations (baseline)
+
+The options below were proposed against source revision `ad36c83`. Many application-layer items have
+since been implemented; consult the current remediation table above rather than treating this list
+as an outstanding-work checklist. The remaining release work is primarily deployment verification,
+active-profile storage protection, and a dedicated frontend test suite.
 
 ### Option 1 — Security-first release baseline (recommended; prerequisite for public deployment)
 
@@ -251,9 +263,13 @@ These controls reduce risk but do not offset the unresolved release blockers.
 - Improve session continuity and memory controls with user-visible inspect/export/delete, clear retention, and tenant/user ownership boundaries.
 - Extend the JARVIS HUD/voice workflows only when each control is wired to a real API and covered by an end-to-end test; do not ship placeholder buttons or decorative controls.
 
-## Verification performed and limitations
+## Baseline verification and limitations (source revision `ad36c83`)
 
-### Results observed
+The following measurements describe the original audit baseline, not the current branch. Current
+remediation status and branch checks are summarized near the top of this report and in
+[`ROADMAP_STATUS.md`](ROADMAP_STATUS.md).
+
+### Baseline results observed
 
 - Backend: `python -m pytest -q` — **97 passed** in 52.51 seconds; Ruff check and format checks passed.
 - Frontend: `npm run typecheck`, `npm run lint`, and `npm run build` passed.

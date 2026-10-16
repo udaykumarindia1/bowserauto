@@ -79,7 +79,7 @@ POST /api/tasks ─► draft ─(start)─► queued ─► running ─► compl
    live worker is left for that worker).
 2. **Execute** — `TaskExecutor.run()`:
    * resolves platform adapter (`agent_mode`: auto → adapter if available else generic agent),
-   * opens/attaches the `BrowserSession` through `SessionHost` (persistent profile, encrypted at rest),
+   * opens/attaches the `BrowserSession` through `SessionHost` (persistent live profile; not application-encrypted—see the Browser layer caveat),
    * for video tasks iterates scenes sequentially (`parallel_generation` must be explicitly enabled),
      each scene: `open_generation_tool → ensure_ready (login/human checks) → upload_references →
      enter_prompt → configure → start_generation → wait_for_completion (state detection loop with

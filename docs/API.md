@@ -90,6 +90,11 @@ target_duration_seconds?}` · `GET /projects/{id}/estimate` · `GET /projects/{i
 `POST /sessions/{id}/upload` (file into the live page while in control) ·
 `GET /sessions/{id}/screenshots` · `GET /sessions/{id}/preview` (latest frame, signed).
 
+Multipart uploads enforce `MAX_UPLOAD_SIZE_MB` per file (50 MiB by default); all HTTP request bodies
+also have a configurable `MAX_REQUEST_BODY_MB` cap (64 MiB by default, including multipart overhead).
+Oversized/ambiguous requests return 413/400 respectively. The app counts streamed bodies without
+buffering them; enforce an additional cap at the trusted ingress.
+
 ## Files, platforms, templates, settings, misc
 
 * `/files` list/get/delete, `GET /files/{id}/url?inline=` → signed download/preview URL.
