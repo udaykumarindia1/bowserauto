@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, FolderKanban, Globe, LayoutDashboard, LayoutTemplate, ListTodo, Plug, Settings, Video, Wand2 } from "lucide-react";
+import { Activity, CalendarClock, FolderKanban, Globe, LayoutDashboard, LayoutTemplate, ListTodo, Plug, Settings, Sparkles, Video, Wand2 } from "lucide-react";
 
 import { SysMonitor } from "@/components/hud/sys-monitor";
 import { useJarvis } from "@/lib/jarvis-store";
@@ -14,8 +14,10 @@ export const NAV = [
   { href: "/projects", label: "Projects", short: "PRJ", icon: FolderKanban },
   { href: "/sessions", label: "Browser Sessions", short: "BRW", icon: Globe },
   { href: "/tasks", label: "Tasks", short: "TSK", icon: ListTodo },
+  { href: "/schedules", label: "Schedules", short: "SCH", icon: CalendarClock },
   { href: "/files", label: "Generated Files", short: "FIL", icon: Video },
   { href: "/platforms", label: "Platforms", short: "PLG", icon: Plug },
+  { href: "/skills", label: "Agent Skills", short: "SKL", icon: Sparkles },
   { href: "/templates", label: "Templates", short: "TPL", icon: LayoutTemplate },
   { href: "/activity", label: "Activity Logs", short: "LOG", icon: Activity },
   { href: "/settings", label: "Settings", short: "SET", icon: Settings },

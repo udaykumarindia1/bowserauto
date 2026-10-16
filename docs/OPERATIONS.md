@@ -22,7 +22,8 @@ STREAM_QUALITY, MOCK_PLATFORM_URL, LLM_PROVIDER/LLM_API_KEY/LLM_MODEL/LLM_BASE_U
 LLM_TIMEOUT_SECONDS/LLM_ALLOWED_HOSTS/AGENT_USE_VISION, SMTP_*, TELEGRAM_*, NOTIFICATION_WEBHOOK_URL,
 MAX_TASK_DURATION_SECONDS, MAX_RETRIES_LIMIT,
 MAX_SCENES_PER_TASK, MAX_BROWSER_SESSIONS_PER_ORG, MAX_GENERATED_FILE_SIZE_MB,
-RATE_LIMIT_PER_MINUTE, SIGNED_URL_TTL_SECONDS`.
+MAX_STORAGE_PER_ORG_MB, MAX_SCHEDULED_WORKFLOWS_PER_ORG, RATE_LIMIT_PER_MINUTE,
+SIGNED_URL_TTL_SECONDS`.
 
 ## Docker Compose
 
@@ -47,8 +48,11 @@ docker compose logs -f browser-worker  # Chromium + task logs
 * **TLS is not configured by the current nginx profile.** `deploy/nginx.conf` listens on HTTP
   port 80 and has only a commented, incomplete 443 example. Terminate TLS at a separately configured
   reverse proxy/load balancer, or add and test a certificate-backed 443 server before exposure.
-  Do not expose the published frontend port over plain HTTP to untrusted networks. Set
-  `PUBLIC_BASE_URL=https://…`, `ALLOWED_ORIGINS=https://…`, and `COOKIE_SECURE=true`.
+  The frontend host port binds to `127.0.0.1` by default so a host-level TLS proxy can connect
+  without exposing it directly. Do not publish it on a public interface over plain HTTP. Set
+  `PUBLIC_BASE_URL=https://…`, matching `ALLOWED_ORIGINS=https://…`, an explicit
+  `TRUSTED_HOSTS`, `COOKIE_SECURE=true`, and `ALLOW_REGISTRATION=false`. The first-owner registration
+  remains available only while the user table is empty.
 
 ### Health & liveness
 
@@ -63,6 +67,15 @@ Workers heartbeat running tasks every `WORKER_HEARTBEAT_SECONDS` (5 s); tasks wh
 silent for `WORKER_STALE_AFTER_SECONDS` (45 s) are re-queued automatically and the affected
 sessions are marked closed so they relaunch on demand — a restart never loses the queue.
 
+### Storage quotas and alerts
+
+`MAX_STORAGE_PER_ORG_MB` is the server-wide storage ceiling (default 51,200 MiB); an organization
+may set a lower `max_storage_mb` limit in Settings. Reference uploads and generated outputs check
+usage before entering tenant storage. The dashboard reports use/limit, and crossing 80% creates an
+in-app notification plus a `storage.quota_warning` activity event. External email/webhook delivery
+requires configuring notification channels. Temporary `.incoming` downloads are excluded from the
+persistent quota until verified and committed.
+
 ## Upgrades
 
 ```bash
@@ -76,12 +89,24 @@ Migrations are plain Alembic (`backend/alembic`). Create new ones with
 
 ## Backups
 
-* PostgreSQL: `docker compose exec postgres pg_dump -U bowser bowserauto > backup.sql`.
-* Files/profiles: snapshot the `app-data` volume (`docker run --rm -v bowserauto_app-data:/data
-  -v $PWD:/backup alpine tar czf /backup/app-data.tgz /data`).
-* Keep `ENCRYPTION_KEY` with the backup for encrypted LLM keys and storage-state snapshots. It
-  does not encrypt or restore the live Chromium profile; protect the `app-data` backup separately
-  with encryption and access controls.
+The repository includes an operator-run, GPG-encrypted snapshot script. Configure a GPG public key
+on the backup host, then run during a maintenance window (the script stops frontend/API/workers
+briefly so database and files are consistent):
+
+```bash
+export BACKUP_GPG_RECIPIENT='backup-key@example.org'
+export BACKUP_DIR=/secure/offsite-staging/bowserauto
+export BACKUP_RETENTION_DAYS=14
+./scripts/backup.sh
+```
+
+The script captures a PostgreSQL dump and `app-data` volume archive, requires encryption, restarts
+application services on exit, and prunes old backup files. It does not automate offsite transfer,
+GPG key management, or restore. Copy snapshots to a separate access-controlled location and
+perform a restore drill before relying on them. Keep the GPG private key and the application's
+`ENCRYPTION_KEY` outside the backup. GPG protects backup copies; it does **not** encrypt active
+Chromium profile files on the live data volume. Volume encryption and strict access controls remain
+required. Redis is transient; PostgreSQL is the source of truth for queued tasks.
 
 ## Running without Docker (systemd style)
 

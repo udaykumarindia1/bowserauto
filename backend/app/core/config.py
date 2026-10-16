@@ -54,6 +54,8 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
     trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+    # Trust forwarded client addresses only when the direct peer matches an explicit proxy CIDR.
+    trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(default_factory=list)
     rate_limit_per_minute: int = 300
     auth_rate_limit_per_minute: int = 20
     allow_registration: bool = True
@@ -84,6 +86,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     max_upload_size_mb: int = 50
     max_generated_file_size_mb: int = 2048
+    max_storage_per_org_mb: int = Field(default=51_200, ge=1)
     allowed_upload_extensions: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             ".png",
@@ -114,6 +117,9 @@ class Settings(BaseSettings):
     session_idle_timeout_seconds: int = 20 * 60
     session_expiry_days: int = 30
     max_browser_sessions_per_org: int = 10
+    # Exact hostnames allowed to reach private networks or use HTTP from production browsers.
+    # Network-level egress policy remains required; these are explicit application exceptions.
+    browser_allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=list)
     stream_max_fps: int = 8
     stream_quality: int = 55
     stream_max_width: int = 1280
@@ -121,6 +127,7 @@ class Settings(BaseSettings):
 
     # --------------------------------------------------------------------- tasks
     max_task_duration_seconds: int = 6 * 3600
+    max_scheduled_workflows_per_org: int = Field(default=50, ge=0, le=1000)
     max_retries_default: int = 3
     max_retries_limit: int = 10
     max_scenes_per_task: int = 200
@@ -168,7 +175,9 @@ class Settings(BaseSettings):
     @field_validator(
         "allowed_origins",
         "trusted_hosts",
+        "trusted_proxy_ips",
         "worker_capabilities",
+        "browser_allowed_hosts",
         "browser_extra_args",
         "allowed_upload_extensions",
         "llm_allowed_hosts",
@@ -189,9 +198,16 @@ class Settings(BaseSettings):
             return [v.strip() for v in text.split(",") if v.strip()]
         return value
 
+    @field_validator("mock_platform_url", mode="before")
+    @classmethod
+    def _empty_mock_url_is_none(cls, value):  # noqa: ANN001
+        return None if value is None or (isinstance(value, str) and not value.strip()) else value
+
     @model_validator(mode="after")
     def _validate_production(self) -> Settings:
         if self.app_env == "production":
+            from urllib.parse import urlsplit
+
             problems = []
             if self.secret_key.startswith("dev-insecure") or len(self.secret_key) < 32:
                 problems.append("SECRET_KEY must be set to a random value of at least 32 characters")
@@ -201,6 +217,23 @@ class Settings(BaseSettings):
                 )
             if self.database_url.startswith("sqlite"):
                 problems.append("DATABASE_URL must point to PostgreSQL in production")
+            public = urlsplit(self.public_base_url)
+            if public.scheme != "https" or not public.hostname:
+                problems.append("PUBLIC_BASE_URL must be an HTTPS URL in production")
+            if not self.cookies_secure:
+                problems.append("COOKIE_SECURE must be true in production")
+            if self.allow_registration:
+                problems.append(
+                    "ALLOW_REGISTRATION must be false in production (first-user bootstrap remains available)"
+                )
+            if not self.trusted_hosts or "*" in self.trusted_hosts:
+                problems.append("TRUSTED_HOSTS must contain explicit hostnames in production")
+            if not self.allowed_origins or any(
+                not origin.startswith("https://") for origin in self.allowed_origins
+            ):
+                problems.append("ALLOWED_ORIGINS must contain only explicit HTTPS origins in production")
+            if self.mock_platform_url:
+                problems.append("MOCK_PLATFORM_URL must be unset in production")
             if problems:
                 raise ValueError("Refusing to start in production: " + "; ".join(problems))
         return self

@@ -5,6 +5,10 @@ from __future__ import annotations
 import ipaddress
 import logging
 import socket
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -16,6 +20,58 @@ from app.agent.llm.providers import ProviderSpec, provider_spec
 from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
+_DNS_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm-dns")
+_DNS_CACHE: dict[tuple[str, int], tuple[float, set[str]]] = {}
+_DNS_LOCK = threading.Lock()
+_DNS_TTL_SECONDS = 10.0
+_DNS_TIMEOUT_SECONDS = 2.0
+_METADATA_HOSTS = {"metadata", "metadata.google.internal", "instance-data.ec2.internal"}
+_METADATA_IPS = {
+    "100.100.100.200",
+    "168.63.129.16",
+    "169.254.169.254",
+    "169.254.170.2",
+    "fd00:ec2::254",
+}
+
+
+def _resolved_addresses(hostname: str, port: int) -> set[str]:
+    key = (hostname, port)
+    now = time.monotonic()
+    with _DNS_LOCK:
+        cached = _DNS_CACHE.get(key)
+        if cached and cached[0] > now:
+            return cached[1]
+    future = _DNS_POOL.submit(socket.getaddrinfo, hostname, port, 0, socket.SOCK_STREAM)
+    try:
+        rows = future.result(timeout=_DNS_TIMEOUT_SECONDS)
+    except FutureTimeout as exc:
+        future.cancel()
+        raise ValueError("LLM provider host could not be resolved within the safety timeout") from exc
+    except OSError as exc:
+        raise ValueError("LLM provider host could not be safely resolved") from exc
+    addresses: set[str] = set()
+    for row in rows:
+        try:
+            addresses.add(str(ipaddress.ip_address(row[4][0].split("%", 1)[0])))
+        except ValueError:
+            continue
+    if not addresses:
+        raise ValueError("LLM provider host did not resolve to an IP address")
+    with _DNS_LOCK:
+        _DNS_CACHE[key] = (now + _DNS_TTL_SECONDS, addresses)
+    return addresses
+
+
+def _is_metadata_destination(hostname: str, addresses: set[str]) -> bool:
+    if hostname in _METADATA_HOSTS:
+        return True
+    for raw in addresses:
+        address = ipaddress.ip_address(raw)
+        mapped = address.ipv4_mapped if isinstance(address, ipaddress.IPv6Address) else None
+        if str(address) in _METADATA_IPS or (mapped and str(mapped) in _METADATA_IPS):
+            return True
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,18 +114,6 @@ def validate_llm_base_url(
         raise ValueError("LLM base URL contains an invalid port") from exc
 
     hostname = parsed.hostname.lower().rstrip(".")
-    metadata_hosts = {
-        "metadata",
-        "metadata.google.internal",
-        "instance-data.ec2.internal",
-    }
-    metadata_ips = {
-        "100.100.100.200",  # Alibaba Cloud metadata
-        "168.63.129.16",  # Azure platform endpoint
-        "169.254.169.254",  # common cloud metadata address
-        "169.254.170.2",  # AWS container credentials endpoint
-        "fd00:ec2::254",  # AWS IPv6 instance metadata
-    }
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
@@ -78,11 +122,7 @@ def validate_llm_base_url(
             address = ipaddress.ip_address(socket.inet_aton(hostname))
         except OSError:
             address = None
-    address_text = str(address) if address else ""
-    mapped_address = (
-        str(address.ipv4_mapped) if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped else ""
-    )
-    if hostname in metadata_hosts or address_text in metadata_ips or mapped_address in metadata_ips:
+    if _is_metadata_destination(hostname, {str(address)} if address else set()):
         raise ValueError("Cloud metadata endpoints are not valid LLM provider URLs")
     is_local_name = hostname == "localhost" or bool(
         address is None
@@ -95,11 +135,27 @@ def validate_llm_base_url(
     allowed_hosts = {host.strip().lower().rstrip(".") for host in settings.llm_allowed_hosts if host.strip()}
     is_allowlisted = hostname in allowed_hosts
 
-    if settings.app_env == "production" and (parsed.scheme == "http" or is_local_name or is_private_address):
-        if not is_allowlisted:
-            raise ValueError("Private or plain-HTTP LLM endpoints must be allowlisted in LLM_ALLOWED_HOSTS")
     if address and address.is_link_local:
         raise ValueError("Link-local LLM endpoints are not allowed")
+    if settings.app_env == "production":
+        if not is_allowlisted and (parsed.scheme == "http" or is_local_name or is_private_address):
+            raise ValueError("Private or plain-HTTP LLM endpoints must be allowlisted in LLM_ALLOWED_HOSTS")
+        if address:
+            resolved = {str(address)}
+        else:
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            try:
+                resolved = _resolved_addresses(hostname, port)
+            except ValueError:
+                if not is_allowlisted:
+                    raise
+                resolved = set()
+        if _is_metadata_destination(hostname, resolved):
+            raise ValueError("Cloud metadata endpoints are not valid LLM provider URLs")
+        if any(ipaddress.ip_address(item).is_link_local for item in resolved):
+            raise ValueError("Link-local LLM endpoints are not allowed")
+        if not is_allowlisted and any(not ipaddress.ip_address(item).is_global for item in resolved):
+            raise ValueError("Private or plain-HTTP LLM endpoints must be allowlisted in LLM_ALLOWED_HOSTS")
     return base
 
 

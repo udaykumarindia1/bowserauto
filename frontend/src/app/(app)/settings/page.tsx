@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, Trash2 } from "lucide-react";
+import { BellRing, Check, QrCode, Smartphone, Trash2, X } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 import { LLMSettingsPanel } from "@/components/settings/llm-settings-panel";
 import { MemoryPanel } from "@/components/hud/memory-panel";
@@ -25,7 +26,8 @@ const LIMIT_LABELS: Record<string, { label: string; unit: string }> = {
   max_retries: { label: "Max retries per scene", unit: "" },
   max_scenes_per_task: { label: "Max scenes per task", unit: "" },
   max_concurrent_tasks: { label: "Max concurrent tasks", unit: "" },
-  max_file_size_mb: { label: "Max generated file size", unit: "MB" },
+  max_file_size_mb: { label: "Max generated file size", unit: "MiB" },
+  max_storage_mb: { label: "Organisation storage cap", unit: "MiB" },
   max_browser_sessions: { label: "Max browser sessions", unit: "" },
   generation_timeout_seconds: { label: "Default generation timeout", unit: "seconds" },
 };
@@ -144,7 +146,7 @@ function OrganisationTab({ settings }: { settings: OrgSettings }) {
           ))}
         </div>
         <p className="mt-2 font-sans text-[10px] text-muted-foreground">
-          Blank = server default. Hard server ceilings: task {sys ? formatDuration(sys.max_task_duration_seconds) : "—"}, retries {sys?.max_retries_limit ?? "—"}, scenes {sys?.max_scenes_per_task ?? "—"}, sessions {sys?.max_browser_sessions_per_org ?? "—"}, file {sys?.max_generated_file_size_mb ?? "—"} MB, {sys?.max_concurrent_tasks_per_worker ?? "—"} tasks/worker.
+          Blank = server default. Organisation storage and file caps are in MiB and can only be tightened. Hard server ceilings: task {sys ? formatDuration(sys.max_task_duration_seconds) : "—"}, retries {sys?.max_retries_limit ?? "—"}, scenes {sys?.max_scenes_per_task ?? "—"}, sessions {sys?.max_browser_sessions_per_org ?? "—"}, file {sys?.max_generated_file_size_mb ?? "—"} MiB, storage {sys?.max_storage_per_org_mb ?? "—"} MiB, {sys?.max_concurrent_tasks_per_worker ?? "—"} tasks/worker.
         </p>
         <Button size="sm" className="mt-3" loading={save.isPending} onClick={() => save.mutate()}>Save organisation settings</Button>
       </HudPanel>
@@ -192,6 +194,119 @@ function MembersTab() {
   );
 }
 
+function DevicesTab() {
+  const queryClient = useQueryClient();
+  const [pairing, setPairing] = React.useState<{ id: string; code: string; expires_at: string } | null>(null);
+  const [notice, setNotice] = React.useState("");
+  const pairingStatus = useQuery({
+    queryKey: ["device-pairing", pairing?.id],
+    queryFn: () => api.auth.pairings.get(pairing!.id),
+    enabled: !!pairing,
+    refetchInterval: (query) => {
+      const value = query.state.data?.status;
+      return value && ["pending", "claimed", "approved"].includes(value) ? 1800 : false;
+    },
+  });
+  const sessions = useQuery({ queryKey: ["login-sessions"], queryFn: api.auth.loginSessions });
+  const create = useMutation({
+    mutationFn: api.auth.pairings.create,
+    onSuccess: (result) => { setPairing(result); setNotice(""); },
+    onError: (error: Error) => toast({ title: "Could not start phone pairing", description: error.message, variant: "destructive" }),
+  });
+  const approve = useMutation({
+    mutationFn: () => api.auth.pairings.approve(pairing!.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["device-pairing", pairing?.id] }),
+    onError: (error: Error) => toast({ title: "Approval failed", description: error.message, variant: "destructive" }),
+  });
+  const reject = useMutation({
+    mutationFn: () => api.auth.pairings.reject(pairing!.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["device-pairing", pairing?.id] }),
+    onError: (error: Error) => toast({ title: "Could not reject pairing", description: error.message, variant: "destructive" }),
+  });
+  const revoke = useMutation({
+    mutationFn: api.auth.revokeLoginSession,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["login-sessions"] }); toast({ title: "Device session revoked", variant: "success" }); },
+    onError: (error: Error) => toast({ title: "Could not revoke session", description: error.message, variant: "destructive" }),
+  });
+
+  const state = pairingStatus.data?.status ?? (pairing ? "pending" : "");
+  const expiry = pairingStatus.data?.expires_at ?? pairing?.expires_at ?? "";
+  const qrValue = pairing?.code && state === "pending" && typeof window !== "undefined"
+    ? `${window.location.origin}/pair#${new URLSearchParams({ id: pairing.id, code: pairing.code })}`
+    : "";
+  React.useEffect(() => {
+    if (state === "completed" && pairing?.code) {
+      setPairing({ ...pairing, code: "" });
+      setNotice("Phone paired. Its app session is separate and can be revoked below.");
+      queryClient.invalidateQueries({ queryKey: ["login-sessions"] });
+    }
+  }, [state, pairing, queryClient]);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <HudPanel title="PAIR A PHONE" corners className="lg:col-span-2">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="min-w-0 flex-1 space-y-3">
+            <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+              Scan this short-lived QR code with the phone you want to use. The phone sends a pairing request; access is not granted until you approve it here. Pairing stays on this app's origin and uses a separate revocable HttpOnly login session.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}><QrCode /> Generate pairing QR</Button>
+              {pairing ? <HudPill tone={state === "completed" ? "green" : state === "claimed" ? "amber" : state === "rejected" || state === "expired" ? "red" : "dim"}>{state || "pending"}</HudPill> : null}
+            </div>
+            {pairing ? (
+              <div className="space-y-2 font-sans text-[11px] text-muted-foreground">
+                <p>Request expires at {expiry ? new Date(expiry).toLocaleTimeString() : "—"}. Pairing codes expire after two minutes and can be used once.</p>
+                {state === "claimed" ? (
+                  <div className="space-y-2 rounded-lg border border-hud-amber/25 bg-hud-amber/5 p-3">
+                    <p className="font-semibold text-foreground">{pairingStatus.data?.device_name || "Phone browser"} is asking to pair.</p>
+                    <p className="break-all">{pairingStatus.data?.user_agent || "Device details unavailable"}</p>
+                    <p>Approve only if you initiated this scan on your own device.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" loading={approve.isPending} onClick={() => approve.mutate()}><Check /> Approve phone</Button>
+                      <Button size="sm" variant="outline" loading={reject.isPending} onClick={() => reject.mutate()}><X /> Reject</Button>
+                    </div>
+                  </div>
+                ) : null}
+                {state === "approved" ? <p className="text-hud-green">Approved. Waiting for the phone to finish its secure sign-in.</p> : null}
+                {state === "completed" ? <p className="text-hud-green">Phone paired successfully. Manage or revoke its login session below.</p> : null}
+                {state === "rejected" ? <p className="text-hud-red">Pairing was rejected. Generate a new QR to try again.</p> : null}
+                {state === "expired" ? <p className="text-hud-red">This QR expired. Generate a new one to try again.</p> : null}
+                {pairingStatus.isError ? <ErrorState error={pairingStatus.error} retry={() => pairingStatus.refetch()} /> : null}
+              </div>
+            ) : null}
+            {notice ? <p className="font-sans text-[11px] text-hud-green">{notice}</p> : null}
+          </div>
+          {qrValue ? (
+            <div className="shrink-0 rounded-xl border border-border bg-white p-3" aria-label="Phone pairing QR code">
+              <QRCodeSVG value={qrValue} size={190} level="M" title="Scan to request phone pairing" />
+            </div>
+          ) : pairingStatus.isLoading && pairing ? <div className="h-[214px] w-[214px] animate-pulse rounded-xl bg-muted" /> : null}
+        </div>
+        <p className="mt-3 flex items-start gap-2 border-t border-border/70 pt-3 font-sans text-[10px] leading-relaxed text-muted-foreground"><Smartphone className="mt-0.5 h-3.5 w-3.5 shrink-0" />Never approve a request you did not initiate. Revoke a paired phone from the active sessions list if it is lost. The QR grants no access until you approve it.</p>
+      </HudPanel>
+
+      <HudPanel title="ACTIVE APP SESSIONS" corners className="lg:col-span-2">
+        {sessions.isLoading ? <Skeleton className="h-24" /> : sessions.isError ? <ErrorState error={sessions.error} retry={() => sessions.refetch()} /> : sessions.data?.length ? (
+          <div className="divide-y divide-border/70">
+            {sessions.data.map((session) => (
+              <div key={session.id} className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                <div className="min-w-0 flex-1">
+                  <p className="break-all font-sans text-[11px] font-medium">{session.user_agent || "Unknown browser"}{session.current ? <span className="ml-2 text-primary">· this device</span> : null}</p>
+                  <p className="mt-0.5 font-sans text-[10px] text-muted-foreground">Created {new Date(session.created_at).toLocaleString()} · Last active {session.last_seen_at ? new Date(session.last_seen_at).toLocaleString() : "unknown"}</p>
+                </div>
+                <Button size="sm" variant="outline" disabled={session.current || revoke.isPending} onClick={() => {
+                  if (window.confirm("Revoke this app session? That device will need to pair or sign in again.")) revoke.mutate(session.id);
+                }}><Trash2 /> Revoke</Button>
+              </div>
+            ))}
+          </div>
+        ) : <p className="font-sans text-xs text-muted-foreground">No active sessions.</p>}
+      </HudPanel>
+    </div>
+  );
+}
+
 function SystemTab({ settings }: { settings: OrgSettings }) {
   const metrics = useQuery({ queryKey: ["system-metrics"], queryFn: api.assistant.system, refetchInterval: 5000 });
   const sys = settings.system;
@@ -235,6 +350,7 @@ function SettingsView() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="devices">Devices</TabsTrigger>
           <TabsTrigger value="memory">Memory</TabsTrigger>
           {admin ? <TabsTrigger value="organisation">Organisation & AI</TabsTrigger> : null}
           {admin ? <TabsTrigger value="members">Members</TabsTrigger> : null}
@@ -242,6 +358,7 @@ function SettingsView() {
         </TabsList>
         <TabsContent value="profile" className="mt-3"><ProfileTab /></TabsContent>
         <TabsContent value="notifications" className="mt-3"><NotificationsTab settings={settings.data} admin={admin} /></TabsContent>
+        <TabsContent value="devices" className="mt-3"><DevicesTab /></TabsContent>
         <TabsContent value="memory" className="mt-3"><MemoryPanel className="max-w-3xl" /></TabsContent>
         {admin ? <TabsContent value="organisation" className="mt-3"><OrganisationTab settings={settings.data} /></TabsContent> : null}
         {admin ? <TabsContent value="members" className="mt-3"><MembersTab /></TabsContent> : null}

@@ -138,6 +138,8 @@ async def _control(
         "stop": task_service.stop_task,
         "takeover": task_service.takeover_task,
         "release": task_service.release_task,
+        "approve": task_service.approve_action,
+        "reject": task_service.reject_action,
     }
     if action == "retry":
         task = await task_service.retry_task(db, task, scene_id=scene_id)
@@ -187,6 +189,20 @@ async def takeover(task_id: uuid.UUID, request: Request, auth: CurrentAuth, db: 
 @router.post("/{task_id}/release", response_model=TaskOut)
 async def release(task_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer) -> TaskOut:
     return await _control("release", task_id, request, auth, db)
+
+
+@router.post("/{task_id}/approve", response_model=TaskOut)
+async def approve_action(
+    task_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer
+) -> TaskOut:
+    return await _control("approve", task_id, request, auth, db)
+
+
+@router.post("/{task_id}/reject", response_model=TaskOut)
+async def reject_action(
+    task_id: uuid.UUID, request: Request, auth: CurrentAuth, db: DB, _: Writer
+) -> TaskOut:
+    return await _control("reject", task_id, request, auth, db)
 
 
 @router.post("/{task_id}/retry", response_model=TaskOut)

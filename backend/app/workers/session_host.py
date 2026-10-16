@@ -29,6 +29,7 @@ from app.browser.streamer import ScreencastStreamer
 from app.core.config import get_settings
 from app.core.database import session_scope
 from app.core.security import decrypt_secret, encrypt_secret
+from app.core.url_safety import sanitize_url
 from app.models import BrowserSession, BrowserSessionStatus
 from app.realtime.bus import EventBus, input_channel, status_channel
 from app.realtime.events import emit, publish_event
@@ -181,7 +182,7 @@ class SessionHost:
                 state_blob = encrypt_secret(json.dumps(state))
         url, title = "", ""
         with contextlib.suppress(Exception):
-            url = await self.driver.url()
+            url = sanitize_url(await self.driver.url())
             title = await self.driver.title()
         with contextlib.suppress(Exception):
             await self.browser.close()
@@ -267,9 +268,10 @@ class SessionHost:
     # -------------------------------------------------------------------- status
     async def publish_status(self, force: bool = False) -> None:
         try:
-            url = await self.driver.url()
+            url = sanitize_url(await self.driver.url())
             title = await self.driver.title()
             tabs = await self.driver.list_tabs()
+            tabs = [{**tab, "url": sanitize_url(str(tab.get("url", "")))} for tab in tabs]
         except Exception:
             return
         status = {

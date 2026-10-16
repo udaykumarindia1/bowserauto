@@ -114,6 +114,8 @@ export default function TaskWorkspacePage() {
                 <dt className="text-muted-foreground">Kind</dt><dd>{titleCase(t.kind)}</dd>
                 <dt className="text-muted-foreground">Platform</dt><dd>{t.platform_key}</dd>
                 <dt className="text-muted-foreground">Agent mode</dt><dd>{t.config.agent_mode ?? "auto"}</dd>
+                <dt className="text-muted-foreground">Action approval</dt><dd>{t.config.approval_mode ?? "confirm_writes"}</dd>
+                <dt className="text-muted-foreground">Domain policy</dt><dd className="break-all">{t.config.allowed_domains?.length ? t.config.allowed_domains.join(", ") : "Global policy"}</dd>
                 <dt className="text-muted-foreground">Priority</dt><dd>P{t.priority}</dd>
                 <dt className="text-muted-foreground">Retries</dt><dd>{t.retry_count}/{t.config.max_retries ?? 3}</dd>
                 <dt className="text-muted-foreground">Elapsed</dt><dd>{elapsed != null ? formatDuration(elapsed) : "—"}</dd>

@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from app.browser.driver import BrowserDriver, DownloadResult, TargetSpec
+from app.core.config import get_settings
 from app.core.errors import (
     AutomationError,
     DownloadFailed,
@@ -519,7 +520,10 @@ class PlatformAdapter:
         target_dir.mkdir(parents=True, exist_ok=True)
         path = target_dir / f"download_{int(time.time())}{self.output_extension}"
         try:
-            size = await fetch(str(src), path)
+            limit_mb = int(
+                (ctx.options or {}).get("max_file_size_mb", get_settings().max_generated_file_size_mb)
+            )
+            size = await fetch(str(src), path, max_bytes=limit_mb * 1024 * 1024)
         except Exception as exc:
             logger.info("media src download failed: %s", exc)
             return None

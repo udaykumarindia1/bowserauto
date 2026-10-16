@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from app.browser.driver import BrowserDriver
-from app.core.errors import AutomationError, ElementNotFound
+from app.core.errors import AutomationError, ElementNotFound, TaskStopped
+from app.core.logging import redact
+from app.core.url_safety import sanitize_url
 from app.queue.control import ControlToken
 from app.storage.paths import resolve_inside, safe_filename, unique_path
 
@@ -43,6 +45,8 @@ class ToolContext:
     status_update: Callable[[str], Awaitable[None]] | None = None
     allowed_files: list[Path] = field(default_factory=list)  # reference files the agent may upload
     state: dict[str, Any] = field(default_factory=dict)
+    approval_mode: str = "never"
+    approval_handler: Callable[[str, dict[str, Any]], Awaitable[bool]] | None = None
 
 
 @dataclass
@@ -54,6 +58,61 @@ class Tool:
 
     def schema(self) -> dict[str, Any]:
         return {"name": self.name, "description": self.description, "parameters": self.parameters}
+
+
+_WRITE_TOOLS = {
+    "browser.click",
+    "browser.type",
+    "browser.select",
+    "browser.upload",
+    "browser.close_tab",
+    "browser.download",
+    "filesystem.create_folder",
+    "filesystem.save_file",
+    "filesystem.rename",
+    "filesystem.move",
+}
+_SAFE_READ_TOOLS = {
+    "browser.get_url",
+    "browser.get_page_text",
+    "browser.extract",
+    "browser.wait",
+    "browser.screenshot",
+    "browser.get_accessibility_tree",
+    "browser.list_tabs",
+    "filesystem.list",
+}
+
+
+def _requires_action_approval(name: str, mode: str) -> bool:
+    if mode == "confirm_writes":
+        return name in _WRITE_TOOLS
+    if mode == "confirm_all":
+        return (
+            name.startswith(("browser.", "filesystem.")) and name not in _SAFE_READ_TOOLS
+        ) or name == "task.undo"
+    return False
+
+
+def sanitize_action_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Return a safe, bounded preview for persistence and approval screens.
+
+    Free-form text and selected values can contain passwords or other user-provided secrets,
+    so they are represented by their length rather than copied into activity logs or the UI.
+    """
+    safe = redact(args)
+    if not isinstance(safe, dict):
+        return {}
+    for key, value in list(safe.items()):
+        normalized = key.lower().replace("-", "_")
+        if normalized in {"text_to_type", "value", "content"}:
+            length = len(str(value))
+            safe[key] = f"[hidden for privacy; {length} characters]"
+        elif isinstance(value, str):
+            safe[key] = value[:500]
+        elif isinstance(value, (dict, list)):
+            safe[key] = "[structured value omitted]"
+    return safe
 
 
 class ToolRegistry:
@@ -78,6 +137,32 @@ class ToolRegistry:
             lines.append(f"- {tool.name}({params}): {tool.description}")
         return "\n".join(lines)
 
+    def catalog(self) -> list[dict[str, Any]]:
+        """Return the built-in, typed skills with their policy classification for the HUD."""
+        items = []
+        for tool in self._tools.values():
+            if tool.name in _WRITE_TOOLS:
+                risk, approval = "write", "confirm_writes or confirm_all"
+            elif tool.name in _SAFE_READ_TOOLS:
+                risk, approval = "read-only", "never"
+            elif tool.name == "task.undo":
+                risk, approval = "state-change", "confirm_all"
+            elif tool.name.startswith("browser."):
+                risk, approval = "state-change", "confirm_all"
+            else:
+                risk, approval = "task-control", "never"
+            items.append(
+                {
+                    "name": tool.name,
+                    "category": tool.name.split(".", 1)[0],
+                    "description": tool.description,
+                    "risk": risk,
+                    "approval": approval,
+                    "parameters": tool.parameters,
+                }
+            )
+        return items
+
     async def execute(self, ctx: ToolContext, name: str, args: dict[str, Any]) -> ToolResult:
         tool = self._tools.get(name)
         if tool is None:
@@ -85,7 +170,16 @@ class ToolRegistry:
         await ctx.control.checkpoint()
         started = time.perf_counter()
         try:
-            result = await tool.handler(ctx, args or {})
+            tool_args = args or {}
+            if _requires_action_approval(name, ctx.approval_mode):
+                if ctx.approval_handler is None:
+                    raise AutomationError(
+                        "Action approval is required but no approval controller is available", retryable=False
+                    )
+                approved = await ctx.approval_handler(name, tool_args)
+                if not approved:
+                    raise TaskStopped("The proposed action was rejected by a user")
+            result = await tool.handler(ctx, tool_args)
         except ElementNotFound as exc:
             result = ToolResult(False, f"{exc.message}")
         except AutomationError as exc:
@@ -131,17 +225,48 @@ async def t_open(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
         return ToolResult(False, "Unsupported URL scheme")
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+    prior_url = await ctx.driver.url()
     await ctx.driver.goto(url)
+    raw_current_url = await ctx.driver.url()
+    if prior_url and prior_url not in ("about:blank", raw_current_url):
+        stack = ctx.state.setdefault("undo_stack", [])
+        stack.append({"kind": "navigation", "from_url": prior_url, "to_url": raw_current_url})
+        del stack[:-20]
+    current_url = sanitize_url(raw_current_url)
     return ToolResult(
         True,
-        f"Opened {await ctx.driver.url()}",
-        {"url": await ctx.driver.url(), "title": await ctx.driver.title()},
+        f"Opened {current_url}",
+        {"url": current_url, "title": await ctx.driver.title()},
     )
 
 
 async def t_back(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
+    prior_url = await ctx.driver.url()
     await ctx.driver.back()
-    return ToolResult(True, f"Went back to {await ctx.driver.url()}")
+    current_url = await ctx.driver.url()
+    stack = ctx.state.get("undo_stack") or []
+    if stack and stack[-1].get("to_url") == prior_url:
+        stack.pop()
+    return ToolResult(True, f"Went back to {sanitize_url(current_url)}")
+
+
+async def task_undo(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
+    """Compensate for the most recent explicit browser.open navigation only."""
+    stack = ctx.state.get("undo_stack") or []
+    if not stack:
+        return ToolResult(False, "There is no recent reversible navigation to undo")
+    action = stack[-1]
+    if action.get("kind") != "navigation":
+        return ToolResult(False, "The latest action has no safe compensating operation")
+    current_url = await ctx.driver.url()
+    if current_url != action.get("to_url"):
+        return ToolResult(False, "Page state changed after that navigation; no action was undone")
+    await ctx.driver.back()
+    restored_url = await ctx.driver.url()
+    if restored_url != action.get("from_url"):
+        return ToolResult(False, "Browser history did not return to the prior page; no action was undone")
+    stack.pop()
+    return ToolResult(True, f"Undid the last navigation; returned to {sanitize_url(restored_url)}")
 
 
 async def t_forward(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
@@ -157,11 +282,10 @@ async def t_refresh(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
 async def t_click(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     target = _target(a)
     await ctx.driver.click(target)
-    await asyncio.sleep(0.6)
     return ToolResult(
         True,
         f"Clicked {a.get('text') or a.get('selector') or a.get('index')}",
-        {"url": await ctx.driver.url()},
+        {"url": sanitize_url(await ctx.driver.url())},
     )
 
 
@@ -256,7 +380,7 @@ async def t_screenshot(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
 
 
 async def t_get_url(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
-    url = await ctx.driver.url()
+    url = sanitize_url(await ctx.driver.url())
     return ToolResult(True, url, {"url": url, "title": await ctx.driver.title()})
 
 
@@ -582,6 +706,14 @@ def build_default_registry() -> ToolRegistry:
             "Report a short status message to the user",
             _schema(message=_p("string", "status"), __required__=["message"]),
             task_update_status,
+        )
+    )
+    r.register(
+        Tool(
+            "task.undo",
+            "Safely undo the most recent explicit browser.open navigation; does not reverse clicks, form submissions, or external side effects",
+            _schema(),
+            task_undo,
         )
     )
     r.register(

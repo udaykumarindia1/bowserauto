@@ -45,15 +45,16 @@ message.
 | Holographic avatar + lip sync | reactive HUD core animated by state and speech output |
 | Push-to-talk Ctrl+Space, wake word "Hey Jarvis" | identical shortcuts via Web Speech API (Chrome/Edge); wake word is "Hey Avinash" (tolerant of mis-hearings) and follows the chosen assistant name |
 | Instant acknowledgement replies | the HUD core switches to THINKING the moment a command is sent and the reply is typed/spoken as soon as it arrives |
-| Self-describing skills/plugins | intent grammar + `GET /api/assistant/capabilities`; browser skills come from the platform adapter registry |
-| Memory + Memory Panel, Undo | `MemoryFact` API, Settings → Memory panel, `forget …` command |
+| Self-describing skills/plugins | searchable Settings-independent Skills page + authenticated `GET /api/assistant/skills`, built from the typed ToolRegistry; only built-in handlers run, with no arbitrary dynamic code loader |
+| Memory + Memory Panel, Undo | `MemoryFact` API, Settings → Memory panel, `forget …` command; `task.undo` only compensates an unchanged explicit navigation |
 | Real confirmation buttons for irreversible actions | `confirm` responses rendered as a banner with explicit buttons (STOP EVERYTHING, queueing agent tasks, clearing memory) |
 | Voice picker, assistant name, colour customisation | Customise overlay (voice, rate, names, hue wheel/hex) |
 | Model/provider selection | Server-side multi-provider abstraction: OpenAI-compatible presets, native Gemini/Ollama/Anthropic, plus heuristic fallback |
 | Hardware monitoring | SYS MONITOR panel from `/api/assistant/system` |
 | Morning briefing / proactive check-ins | `GET /api/assistant/briefing` on login; proactive console notices for `task.attention`, `human.required`, failures, completions (browser notifications optional) |
 | Autonomous agent tasks, browser control, file processor | the core product: task queue, browser agent, sessions, generated files |
-| Screen/webcam vision, system control, clipboard, phone dashboard, reminders, weather | desktop-only — replaced by the live browser viewer (screen of the automation browser), paste-into-page input, and the notifications centre; not re-implemented as OS-level features in a web app |
+| Remote phone dashboard | responsive same-origin web HUD; Settings → Devices pairs a phone through a two-minute QR request and an explicit approval on the signed-in device; the phone receives a separate revocable HttpOnly app session |
+| Screen/webcam vision, system control, clipboard, reminders, weather | desktop-only — replaced by the live browser viewer (screen of the automation browser), paste-into-page input, and the notifications centre; these OS-level features are not exposed to the web app |
 
 ## Keyboard
 

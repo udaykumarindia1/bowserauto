@@ -27,7 +27,8 @@ from sqlalchemy import select, update
 
 from app.agent.agent import AgentStep, BrowserAgent
 from app.agent.llm import build_llm_client
-from app.agent.tools import ToolContext
+from app.agent.tools import ToolContext, sanitize_action_args
+from app.browser.policy_driver import ApprovalGuardDriver
 from app.core.config import get_settings
 from app.core.database import session_scope
 from app.core.errors import (
@@ -36,12 +37,14 @@ from app.core.errors import (
     ControlSignal,
     DownloadFailed,
     HumanInterventionRequired,
+    LimitExceededError,
     LoginRequired,
     SceneRetryRequested,
     SceneSkipped,
     TaskStopped,
 )
-from app.core.logging import Timer, bind_log_context, clear_log_context
+from app.core.logging import Timer, bind_log_context, clear_log_context, redact
+from app.core.url_safety import sanitize_url
 from app.models import (
     AgentAction,
     AgentRun,
@@ -64,6 +67,7 @@ from app.platforms.registry import create_adapter
 from app.queue.control import ControlToken
 from app.realtime.events import emit, publish_event
 from app.services.assistant_service import memory_prompt_lines
+from app.services.file_service import ensure_org_storage_capacity
 from app.services.notification_service import notify
 from app.services.org_settings import llm_overrides_for
 from app.storage.files import inspect_media, sha256_file
@@ -181,6 +185,9 @@ class TaskExecutor:
             session_id = await self._create_ephemeral_session()
             self.ephemeral_session = True
         self.host = await self.worker.get_or_start_host(session_id, self.task.organization_id)
+        browser_policy = getattr(self.host.browser, "url_policy", None)
+        if browser_policy is not None:
+            browser_policy.set_allowed_domains((self.task.config or {}).get("allowed_domains") or [])
         self.host.acquire(self.task_id)
         # The agent drives the browser exclusively while a task runs: a session that was opened
         # manually (interactive) must not keep accepting human input until TAKE OVER is pressed.
@@ -235,6 +242,9 @@ class TaskExecutor:
             return
         host = self.host
         self.host = None
+        browser_policy = getattr(host.browser, "url_policy", None)
+        if browser_policy is not None:
+            browser_policy.set_allowed_domains([])
         with contextlib.suppress(Exception):
             await host.set_interactive(False)
         host.release()
@@ -513,8 +523,13 @@ class TaskExecutor:
                 project_id=self.project.id,
             )
 
+        adapter_driver = ApprovalGuardDriver(
+            self.host.driver,
+            approval_mode=str((self.task.config or {}).get("approval_mode", "confirm_writes")),
+            approval_handler=self._request_tool_approval,
+        )
         ctx = AdapterContext(
-            driver=self.host.driver,
+            driver=adapter_driver,
             control=self.control,
             scene=spec,
             log=self._adapter_log(scene),
@@ -531,6 +546,9 @@ class TaskExecutor:
             options={
                 "agent_mode": (self.task.config or {}).get("agent_mode", "auto"),
                 "instructions": self.task.instructions,
+                "max_file_size_mb": int(
+                    (self.task.config or {}).get("max_file_size_mb", self.settings.max_generated_file_size_mb)
+                ),
                 "mock_options": (self.task.config or {}).get("mock_options") or {},
             },
             run_agent=self._agent_runner(scene, spec),
@@ -654,88 +672,98 @@ class TaskExecutor:
             ext=ext,
         )
         target = target_dir / filename
-        if target.exists():
-            versions = target_dir / "versions"
-            versions.mkdir(exist_ok=True)
-            archived = unique_path(versions / f"{target.stem}_v1{target.suffix}")
-            target.rename(archived)
+        archived_name: str | None = None
+        try:
+            async with session_scope() as db:
+                # Keep the organization lock from quota calculation through file move and DB commit
+                # so concurrent workers cannot both spend the same remaining disk quota.
+                await ensure_org_storage_capacity(db, self.task.organization_id, size)
+                if target.exists():
+                    versions = target_dir / "versions"
+                    versions.mkdir(exist_ok=True)
+                    archived = unique_path(versions / f"{target.stem}_v1{target.suffix}")
+                    target.rename(archived)
+                    archived_name = archived.name
+                src.replace(target)
+                digest = sha256_file(target)
+                # Deduplicate: a retry that produced the same bytes must not create a second record.
+                existing = (
+                    (
+                        await db.execute(
+                            select(GeneratedFile).where(
+                                GeneratedFile.scene_id == scene.id, GeneratedFile.sha256 == digest
+                            )
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if existing is not None:
+                    existing.path = str(target)
+                    existing.filename = target.name
+                    record = existing
+                else:
+                    record = GeneratedFile(
+                        organization_id=self.task.organization_id,
+                        project_id=self.project.id,
+                        task_id=self.task_id,
+                        scene_id=scene.id,
+                        filename=target.name,
+                        path=str(target),
+                        mime_type="video/mp4"
+                        if ext == ".mp4"
+                        else "video/webm"
+                        if ext == ".webm"
+                        else "text/markdown"
+                        if ext == ".md"
+                        else f"image/{ext.strip('.')}",
+                        size_bytes=target.stat().st_size,
+                        sha256=digest,
+                        duration_seconds=media.duration_seconds if media else None,
+                        width=media.width if media else None,
+                        height=media.height if media else None,
+                        platform_key=self.task.platform_key,
+                        prompt=scene.prompt,
+                        generation_seconds=round(outcome.generation_seconds, 1),
+                        status="verified",
+                        retry_count=attempt - 1,
+                        metadata_={
+                            "source_url": sanitize_url(outcome.download.url),
+                            "suggested_filename": outcome.download.suggested_filename,
+                            **outcome.details,
+                        },
+                    )
+                    db.add(record)
+                await db.flush()
+                file_id = record.id
+                scene_row = await db.get(Scene, scene.id)
+                if scene_row:
+                    scene_row.status = SceneStatus.completed.value
+                    scene_row.generated_file_id = file_id
+                    scene_row.completed_at = _now()
+                    scene_row.last_error = ""
+                    scene_row.retry_count = attempt - 1
+                    scene_row.generation_metadata = {
+                        **(scene_row.generation_metadata or {}),
+                        "state": GenerationState.SUCCESS.value,
+                        "generation_seconds": round(outcome.generation_seconds, 1),
+                        "file": target.name,
+                        "size_bytes": target.stat().st_size,
+                        "duration_seconds": media.duration_seconds if media else None,
+                        "resolution": f"{media.width}x{media.height}" if media and media.width else None,
+                        "platform": self.task.platform_key,
+                        "attempts": attempt,
+                        "generated_at": _now().isoformat(),
+                    }
+        except LimitExceededError as exc:
+            src.unlink(missing_ok=True)
+            raise DownloadFailed(str(exc), retryable=False) from exc
+        if archived_name:
             await self._log(
-                f"Existing {filename} archived as versions/{archived.name}",
+                f"Existing {filename} archived as versions/{archived_name}",
                 event_type="file.created",
                 scene_id=scene.id,
             )
-        src.replace(target)
-        digest = sha256_file(target)
-        async with session_scope() as db:
-            # Deduplicate: a retry that produced the same bytes must not create a second record.
-            existing = (
-                (
-                    await db.execute(
-                        select(GeneratedFile).where(
-                            GeneratedFile.scene_id == scene.id, GeneratedFile.sha256 == digest
-                        )
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            if existing is not None:
-                existing.path = str(target)
-                existing.filename = target.name
-                record = existing
-            else:
-                record = GeneratedFile(
-                    organization_id=self.task.organization_id,
-                    project_id=self.project.id,
-                    task_id=self.task_id,
-                    scene_id=scene.id,
-                    filename=target.name,
-                    path=str(target),
-                    mime_type="video/mp4"
-                    if ext == ".mp4"
-                    else "video/webm"
-                    if ext == ".webm"
-                    else "text/markdown"
-                    if ext == ".md"
-                    else f"image/{ext.strip('.')}",
-                    size_bytes=target.stat().st_size,
-                    sha256=digest,
-                    duration_seconds=media.duration_seconds if media else None,
-                    width=media.width if media else None,
-                    height=media.height if media else None,
-                    platform_key=self.task.platform_key,
-                    prompt=scene.prompt,
-                    generation_seconds=round(outcome.generation_seconds, 1),
-                    status="verified",
-                    retry_count=attempt - 1,
-                    metadata_={
-                        "source_url": outcome.download.url,
-                        "suggested_filename": outcome.download.suggested_filename,
-                        **outcome.details,
-                    },
-                )
-                db.add(record)
-            await db.flush()
-            file_id = record.id
-            scene_row = await db.get(Scene, scene.id)
-            if scene_row:
-                scene_row.status = SceneStatus.completed.value
-                scene_row.generated_file_id = file_id
-                scene_row.completed_at = _now()
-                scene_row.last_error = ""
-                scene_row.retry_count = attempt - 1
-                scene_row.generation_metadata = {
-                    **(scene_row.generation_metadata or {}),
-                    "state": GenerationState.SUCCESS.value,
-                    "generation_seconds": round(outcome.generation_seconds, 1),
-                    "file": target.name,
-                    "size_bytes": target.stat().st_size,
-                    "duration_seconds": media.duration_seconds if media else None,
-                    "resolution": f"{media.width}x{media.height}" if media and media.width else None,
-                    "platform": self.task.platform_key,
-                    "attempts": attempt,
-                    "generated_at": _now().isoformat(),
-                }
         await self._write_scene_metadata(scene, target, media, outcome, attempt)
         await self._screenshot("download", scene)
         await self._log(
@@ -886,7 +914,7 @@ class TaskExecutor:
                 await self._log(
                     f"Page re-inspected: {snapshot.title or snapshot.url}",
                     event_type="agent.thought",
-                    url=snapshot.url,
+                    url=sanitize_url(snapshot.url),
                 )
             await self._screenshot("after_takeover")
         # The worker writes paused/waiting_for_human straight to the database, so the cached
@@ -895,6 +923,66 @@ class TaskExecutor:
         await self._log("Task resumed", event_type="task.resumed")
 
     # ================================================================ generic agent
+    async def _request_tool_approval(self, name: str, args: dict[str, Any]) -> bool:
+        """Persist a privacy-safe action preview and wait for an organization member's decision."""
+        assert self.task is not None
+        if len(json.dumps(args, default=str)) > 100_000:
+            raise AutomationError(
+                "The proposed action is too large to review safely; split it into smaller actions.",
+                retryable=False,
+            )
+        public_args = sanitize_action_args(args)
+        if len(json.dumps(public_args, default=str)) > 6000:
+            raise AutomationError(
+                "The proposed action preview is too large to review safely; split it into smaller actions.",
+                retryable=False,
+            )
+        self.control.begin_approval()
+        attention = {
+            "kind": "approval",
+            "reason": f"Review the proposed {name} action before it runs.",
+            "pending_action": {"tool": name, "args": public_args},
+            "options": ["approve", "reject", "stop"],
+            "since": _now().isoformat(),
+        }
+        await self._set_task(
+            status=TaskStatus.waiting_for_human.value,
+            attention=attention,
+            current_action=f"Waiting for approval: {name}",
+            human_control=False,
+        )
+        await self._log(
+            f"Approval requested for {name}",
+            level="warning",
+            event_type="task.approval",
+            action_name=name,
+            action_args=public_args,
+        )
+        await notify(
+            self.task.organization_id,
+            "action_approval",
+            "Browser action needs approval",
+            f"{self.task.title}: review {name} in the task panel.",
+            task_id=self.task_id,
+            severity="warning",
+        )
+        if self.host:
+            await self.host.set_action(f"Waiting for approval: {name}", kind="approval")
+        approved = await self.control.wait_for_approval()
+        if approved:
+            await self._set_task(
+                status=TaskStatus.running.value,
+                attention={},
+                current_action=f"Approved: {name}",
+                paused_at=None,
+            )
+            await self._log(f"Approval granted for {name}", event_type="task.approval", approved=True)
+            return True
+        await self._log(
+            f"Approval rejected for {name}", level="warning", event_type="task.approval", approved=False
+        )
+        return False
+
     def _agent_runner(self, scene: Scene | None, spec: SceneSpec | None):
         async def run(goal: str, inputs: dict[str, Any] | None) -> dict[str, Any]:
             assert self.host is not None and self.project_dir is not None and self.task is not None
@@ -908,6 +996,8 @@ class TaskExecutor:
                 screenshot=lambda stage: self._screenshot(stage, scene),
                 status_update=lambda message: self._task_action(message),
                 allowed_files=list(spec.reference_files) if spec else [],
+                approval_mode=str((self.task.config or {}).get("approval_mode", "confirm_writes")),
+                approval_handler=self._request_tool_approval,
             )
             agent = BrowserAgent(
                 tool_ctx,
@@ -1025,9 +1115,9 @@ class TaskExecutor:
                     task_id=self.task_id,
                     index=step.index,
                     tool=step.tool,
-                    arguments=step.args,
+                    arguments=sanitize_action_args(step.args),
                     reasoning=step.reasoning,
-                    result=step.result.to_dict(),
+                    result=redact(step.result.to_dict()),
                     success=step.result.ok,
                     duration_ms=step.duration_ms,
                     error="" if step.result.ok else step.result.summary[:500],
@@ -1354,7 +1444,7 @@ class TaskExecutor:
         path.write_bytes(data)
         url, title = "", ""
         with contextlib.suppress(Exception):
-            url = await self.host.driver.url()
+            url = sanitize_url(await self.host.driver.url())
             title = await self.host.driver.title()
         async with session_scope() as db:
             shot = Screenshot(

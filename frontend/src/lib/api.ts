@@ -9,8 +9,10 @@
 
 import type {
   ActivityEntry,
+  AgentSkill,
   AssistantResponse,
   Briefing,
+  DevicePairing,
   MemoryFact,
   SystemMetrics,
   AgentRun,
@@ -33,6 +35,7 @@ import type {
   Screenshot,
   Task,
   TaskDetail,
+  TaskSchedule,
   Template,
   User,
 } from "./types";
@@ -157,8 +160,18 @@ export const api = {
     updateMe: (body: Partial<Pick<User, "full_name" | "preferences">>) => patch<User>("/api/auth/me", body),
     changePassword: (current_password: string, new_password: string) => post<void>("/api/auth/change-password", { current_password, new_password }),
     switchOrganization: (orgId: string) => post<AuthResponse>(`/api/auth/switch-organization/${orgId}`),
-    loginSessions: () => get<{ id: string; ip_address: string; user_agent: string; created_at: string; last_seen_at: string; current: boolean }[]>("/api/auth/sessions"),
+    loginSessions: () => get<{ id: string; ip_address: string; user_agent: string; created_at: string; last_seen_at: string; expires_at: string; current: boolean }[]>("/api/auth/sessions"),
     revokeLoginSession: (id: string) => del(`/api/auth/sessions/${id}`),
+    pairings: {
+      create: () => post<{ id: string; code: string; expires_at: string }>("/api/auth/device-pairings"),
+      claim: (pairing_id: string, code: string, device_name = "Phone browser") =>
+        post<{ status: string }>("/api/auth/device-pairings/claim", { pairing_id, code, device_name }),
+      poll: (pairing_id: string, code: string) =>
+        post<{ status: string; authenticated: boolean; csrf_token?: string }>("/api/auth/device-pairings/poll", { pairing_id, code }),
+      get: (id: string) => get<DevicePairing>(`/api/auth/device-pairings/${id}`),
+      approve: (id: string) => post<DevicePairing>(`/api/auth/device-pairings/${id}/approve`),
+      reject: (id: string) => post<DevicePairing>(`/api/auth/device-pairings/${id}/reject`),
+    },
   },
 
   dashboard: () => get<Dashboard>("/api/dashboard"),
@@ -207,13 +220,31 @@ export const api = {
     create: (body: Record<string, unknown>) => post<TaskDetail>("/api/tasks", body),
     update: (id: string, body: Record<string, unknown>) => patch<TaskDetail>(`/api/tasks/${id}`, body),
     remove: (id: string) => del(`/api/tasks/${id}`),
-    action: (id: string, action: "start" | "pause" | "resume" | "stop" | "takeover" | "release" | "retry" | "skip", body?: Record<string, unknown>) =>
+    action: (id: string, action: "start" | "pause" | "resume" | "stop" | "takeover" | "release" | "retry" | "skip" | "approve" | "reject", body?: Record<string, unknown>) =>
       post<Task>(`/api/tasks/${id}/${action}`, body ?? {}),
     reorder: (task_ids: string[]) => post<Task[]>("/api/tasks/reorder", { task_ids }),
     stopAll: () => post<{ stopped: number }>("/api/tasks/stop-all"),
     activity: (id: string, limit = 300) => get<ActivityEntry[]>(`/api/tasks/${id}/activity`, { limit }),
     screenshots: (id: string) => get<Screenshot[]>(`/api/tasks/${id}/screenshots`),
     agentRuns: (id: string) => get<AgentRun[]>(`/api/tasks/${id}/agent-runs`),
+  },
+
+  schedules: {
+    list: () => get<TaskSchedule[]>("/api/schedules"),
+    create: (body: {
+      title: string;
+      kind: string;
+      instructions: string;
+      platform_key: string;
+      browser_session_id?: string;
+      priority: number;
+      run_at: string;
+      repeat_interval_minutes: number | null;
+      config: { agent_mode: "generic"; approval_mode: "confirm_writes" | "confirm_all"; allowed_domains: string[] };
+    }) => post<TaskSchedule>("/api/schedules", body),
+    update: (id: string, body: { enabled?: boolean; run_at?: string; repeat_interval_minutes?: number | null }) =>
+      patch<TaskSchedule>(`/api/schedules/${id}`, body),
+    remove: (id: string) => del(`/api/schedules/${id}`),
   },
 
   sessions: {
@@ -272,6 +303,7 @@ export const api = {
       post<AssistantResponse>("/api/assistant/command", { text, context, confirmed }),
     briefing: (local_hour: number) => get<Briefing>("/api/assistant/briefing", { local_hour }),
     capabilities: () => get<{ tools: { tool: string; description: string; args: Record<string, string> }[]; pages: string[]; assistant_name: string; user_name: string }>("/api/assistant/capabilities"),
+    skills: () => get<AgentSkill[]>("/api/assistant/skills"),
     memory: {
       list: () => get<MemoryFact[]>("/api/assistant/memory"),
       add: (body: { key?: string; value: string; category?: string }) => post<MemoryFact>("/api/assistant/memory", body),

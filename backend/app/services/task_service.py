@@ -22,6 +22,7 @@ from app.models import BrowserSession, Project, Scene, SceneStatus, Task, TaskCo
 from app.platforms.registry import get_adapter_class
 from app.realtime.bus import WORKER_WAKEUP, get_bus
 from app.realtime.events import emit
+from app.schemas import TaskConfig
 from app.services.org_settings import effective_limits
 
 ACTIVE_STATUSES = [s.value for s in TaskStatus if s.is_active]
@@ -84,7 +85,10 @@ async def list_tasks(
 async def create_task(db: AsyncSession, auth: AuthContext, data: dict[str, Any]) -> Task:
     settings = get_settings()
     limits = effective_limits(auth.organization)
-    config = dict(data.get("config") or {})
+    try:
+        config = TaskConfig.model_validate(data.get("config") or {}).model_dump()
+    except ValueError as exc:
+        raise ValidationFailed(str(exc)) from exc
     config["max_retries"] = min(
         int(config.get("max_retries", settings.max_retries_default)), limits["max_retries"]
     )
@@ -293,6 +297,40 @@ async def _signal(db: AsyncSession, task: Task, control: TaskControl, event: str
     return task
 
 
+async def _decide_action_approval(db: AsyncSession, task: Task, control: TaskControl) -> Task:
+    if task.status != TaskStatus.waiting_for_human.value or (task.attention or {}).get("kind") != "approval":
+        raise ConflictError("This task has no pending action approval")
+    worker_id = task.worker_id
+    if not worker_id:
+        raise ConflictError("The task worker is not available; wait for recovery before deciding")
+    result = await db.execute(
+        update(Task)
+        .where(
+            Task.id == task.id,
+            Task.status == TaskStatus.waiting_for_human.value,
+            Task.worker_id == worker_id,
+            Task.control == TaskControl.none.value,
+        )
+        .values(control=control.value)
+    )
+    if result.rowcount != 1:
+        raise ConflictError("The pending action was already decided or is no longer available")
+    approved = control == TaskControl.approve_action
+    await emit(
+        db,
+        "task.approval",
+        task.organization_id,
+        "Pending browser action approved" if approved else "Pending browser action rejected",
+        task_id=task.id,
+        project_id=task.project_id,
+        payload={"control": control.value, "status": task.status},
+    )
+    await db.commit()
+    await _wake_workers(task.id, control.value)
+    await db.refresh(task)
+    return task
+
+
 async def pause_task(db: AsyncSession, task: Task) -> Task:
     if task.status == TaskStatus.queued.value and task.worker_id is None:
         result = await db.execute(
@@ -389,6 +427,14 @@ async def release_task(db: AsyncSession, task: Task) -> Task:
     return await _signal(db, task, TaskControl.release, "human.released", "Returning control to the agent")
 
 
+async def approve_action(db: AsyncSession, task: Task) -> Task:
+    return await _decide_action_approval(db, task, TaskControl.approve_action)
+
+
+async def reject_action(db: AsyncSession, task: Task) -> Task:
+    return await _decide_action_approval(db, task, TaskControl.reject_action)
+
+
 async def retry_task(db: AsyncSession, task: Task, *, scene_id: uuid.UUID | None = None) -> Task:
     if (
         task.status
@@ -434,8 +480,8 @@ async def skip_scene(db: AsyncSession, task: Task, scene_id: uuid.UUID | None = 
 
 
 async def update_task(db: AsyncSession, task: Task, data: dict[str, Any]) -> Task:
-    if task.status in (TaskStatus.running.value,) and ("config" in data):
-        raise ConflictError("Stop or pause the task before changing its configuration")
+    if task.status in RUNNING_LIKE and "config" in data:
+        raise ConflictError("Stop the task before changing its configuration")
     for key, value in data.items():
         if key == "config" and value is not None:
             cfg = {**task.config, **value}

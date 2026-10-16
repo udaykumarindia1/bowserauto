@@ -112,7 +112,6 @@ function ReferencesTab({ project, editable }: { project: ProjectDetail; editable
             {assets.data!.map((a) => (
               <div key={a.id} className="group border border-border">
                 {previews[a.id] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={previews[a.id]} alt={a.filename} className="aspect-square w-full bg-black object-cover" />
                 ) : (
                   <div className="flex aspect-square items-center justify-center bg-hud-dark font-sans text-[10px] text-muted-foreground">{a.mime_type}</div>

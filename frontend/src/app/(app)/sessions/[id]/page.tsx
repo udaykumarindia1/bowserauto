@@ -126,7 +126,6 @@ export default function SessionPage() {
               <div className="grid max-h-80 grid-cols-2 gap-1.5 overflow-y-auto p-2">
                 {shots.data!.slice(0, 20).map((sh) => (
                   <a key={sh.id} href={sh.image.url} target="_blank" rel="noreferrer" className="border border-border hover:border-primary">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={sh.image.url} alt={sh.stage} loading="lazy" className="aspect-video w-full bg-black object-cover object-top" />
                     <p className="truncate px-1 py-0.5 font-sans text-[9px] text-muted-foreground">{formatTime(sh.created_at)} · {sh.stage}</p>
                   </a>

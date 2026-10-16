@@ -9,7 +9,7 @@ import pytest
 
 from app.agent.agent import BrowserAgent
 from app.agent.llm import LLMMessage, LLMResponse, LLMUnavailable
-from app.agent.tools import ToolContext, ToolRegistry
+from app.agent.tools import ToolContext, ToolRegistry, build_default_registry
 from app.browser.driver import PageSnapshot
 from app.queue.control import ControlToken
 
@@ -27,13 +27,33 @@ class CaptureLLM:
         return LLMResponse(self.response, self.model)
 
 
+class HistoryDriver:
+    def __init__(self) -> None:
+        self.current_url = "https://start.example.test/"
+        self.history: list[str] = []
+
+    async def url(self) -> str:
+        return self.current_url
+
+    async def goto(self, url: str) -> None:
+        self.history.append(self.current_url)
+        self.current_url = url
+
+    async def back(self) -> None:
+        if self.history:
+            self.current_url = self.history.pop()
+
+    async def title(self) -> str:
+        return "Test page"
+
+
 async def _noop(*_args: Any, **_kwargs: Any) -> None:
     return None
 
 
-def _context() -> ToolContext:
+def _context(driver=None) -> ToolContext:  # noqa: ANN001
     return ToolContext(
-        driver=None,  # _decide only builds a prompt; no browser is launched in this test.
+        driver=driver,  # _decide-only tests do not launch a browser.
         control=ControlToken(),
         project_dir=Path("/tmp"),
         downloads_dir=Path("/tmp"),
@@ -75,3 +95,21 @@ async def test_agent_rejects_malformed_tool_decisions(response: str) -> None:
 
     with pytest.raises(LLMUnavailable, match="invalid tool-call object"):
         await agent._decide("Read the page", {}, PageSnapshot("https://example.com", "Example", ""), [])
+
+
+async def test_undo_only_compensates_an_unchanged_explicit_navigation() -> None:
+    driver = HistoryDriver()
+    ctx = _context(driver)
+    registry = build_default_registry()
+
+    opened = await registry.execute(ctx, "browser.open", {"url": "next.example.test"})
+    assert opened.ok and driver.current_url == "https://next.example.test"
+    undone = await registry.execute(ctx, "task.undo", {})
+    assert undone.ok and driver.current_url == "https://start.example.test/"
+
+    await registry.execute(ctx, "browser.open", {"url": "another.example.test"})
+    driver.current_url = "https://changed-after-open.example.test"
+    refused = await registry.execute(ctx, "task.undo", {})
+    assert not refused.ok
+    assert "Page state changed" in refused.summary
+    assert driver.current_url == "https://changed-after-open.example.test"

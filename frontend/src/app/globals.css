@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
 
 /*
  * JARVIS HUD theme (ported from the Mark-LV desktop palette).
@@ -141,7 +140,7 @@
   }
   /* Section labels keep the HUD identity without turning every panel into a terminal. */
   .hud-section {
-    @apply hud-title flex items-center gap-2 border-b border-border/70 pb-1.5;
+    @apply font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-primary flex items-center gap-2 border-b border-border/70 pb-1.5;
   }
   .hud-section::before {
     content: "";

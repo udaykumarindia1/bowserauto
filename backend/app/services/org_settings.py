@@ -18,6 +18,7 @@ LIMIT_KEYS = {
     "max_scenes_per_task": (1, 1000),
     "max_concurrent_tasks": (1, 20),
     "max_file_size_mb": (1, 10_000),
+    "max_storage_mb": (1, 1_000_000),
     "max_browser_sessions": (1, 50),
     "generation_timeout_seconds": (30, 7200),
 }
@@ -31,6 +32,7 @@ def effective_limits(org: Organization | None) -> dict[str, Any]:
         "max_scenes_per_task": settings.max_scenes_per_task,
         "max_concurrent_tasks": settings.max_concurrent_tasks_per_worker,
         "max_file_size_mb": settings.max_generated_file_size_mb,
+        "max_storage_mb": settings.max_storage_per_org_mb,
         "max_browser_sessions": settings.max_browser_sessions_per_org,
         "generation_timeout_seconds": settings.generation_timeout_seconds,
     }

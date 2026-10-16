@@ -2,7 +2,7 @@
 
 The authoritative, always-current contract is the OpenAPI document served by the backend:
 `GET /api/openapi.json` and the interactive docs at `/api/docs`. This page summarises the
-surface (101 operations) and the conventions.
+surface and the conventions.
 
 ## Conventions
 
@@ -25,17 +25,27 @@ surface (101 operations) and the conventions.
 | POST | `/auth/login` / `/auth/logout` | |
 | GET / PATCH | `/auth/me` | `PATCH {full_name?, preferences?}` (assistant prefs live under `preferences.jarvis` — legacy key name, assistant default is AVINASH) |
 | POST | `/auth/change-password` | |
-| GET / DELETE | `/auth/sessions[/{id}]` | device sessions |
+| GET / DELETE | `/auth/sessions[/{id}]` | List and revoke this user's active login sessions. |
+| POST | `/auth/device-pairings` | Authenticated device creates a two-minute pairing request → `{id, code, expires_at}`. The raw code is returned once. |
+| POST | `/auth/device-pairings/claim` | Public phone endpoint: `{pairing_id, code, device_name?}` marks a scan as waiting for confirmation. |
+| POST | `/auth/device-pairings/poll` | Public phone endpoint: `{pairing_id, code}`; only an explicitly approved request can exchange once for a normal HttpOnly login cookie. |
+| GET | `/auth/device-pairings/{id}` | Creator checks status/device metadata; code is never returned. |
+| POST | `/auth/device-pairings/{id}/approve\|reject` | Creator explicitly allows or rejects the claimed phone. |
 | POST | `/auth/switch-organization/{org_id}` | |
+
+The QR URL keeps the one-time pairing code in the browser fragment (not the HTTP request path or
+referrer). Scanning alone does not grant access: the signed-in device must approve the request.
+Pairing expires after two minutes, can be exchanged for one app session only, and that session is
+independently revocable from `/auth/sessions`.
 
 ## Tasks (queue)
 
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/tasks?status=active\|attention\|finished\|<status>&project_id&limit&offset` | |
-| POST | `/tasks` | `{kind, project_id?, browser_session_id?, instructions, platform_key?, priority(1–10), start, config{max_retries, generation_timeout_seconds, action_timeout_seconds, parallel_generation, scene_ids?, retry_failed_only, headless?, agent_mode auto\|adapter\|generic, mock_options}}` |
+| POST | `/tasks` | `{kind, project_id?, browser_session_id?, instructions, platform_key?, priority(1–10), start, config{max_retries, generation_timeout_seconds, action_timeout_seconds, parallel_generation, scene_ids?, retry_failed_only, headless?, agent_mode auto\|adapter\|generic, approval_mode confirm_writes\|confirm_all\|never, allowed_domains[], mock_options}}` |
 | GET / PATCH / DELETE | `/tasks/{id}` | delete → 409 while active |
-| POST | `/tasks/{id}/start\|pause\|resume\|stop\|takeover\|release\|retry\|skip` | control actions are asynchronous — poll the task or listen to events; `retry`/`skip` accept `{scene_id?}` |
+| POST | `/tasks/{id}/start\|pause\|resume\|stop\|takeover\|release\|retry\|skip\|approve\|reject` | control actions are asynchronous — poll the task or listen to events; `retry`/`skip` accept `{scene_id?}`; `approve`/`reject` decide a pending generic-agent tool action |
 | POST | `/tasks/reorder` | `{task_ids}` for queued tasks |
 | POST | `/tasks/stop-all` | STOP EVERYTHING → `{stopped}` |
 | GET | `/tasks/{id}/events` | SSE stream scoped to one task |
@@ -43,8 +53,28 @@ surface (101 operations) and the conventions.
 
 Task object: `status`, `control`, `human_control`, `progress{total, completed, failed, skipped,
 percent, current_scene_*}`, `current_action`, `attention{kind, reason, scene_id, scene_code,
-options, since}`, `priority`, `retry_count`, `worker_id`, timestamps, `error`, `result`;
-`GET /tasks/{id}` adds `steps[]`, `scenes[]`, `project_name`, `session_name`.
+options, since, pending_action?}`, `priority`, `retry_count`, `worker_id`, timestamps, `error`, `result`;
+`GET /tasks/{id}` adds `steps[]`, `scenes[]`, `project_name`, `session_name`. `confirm_writes` and
+`confirm_all` apply to generic-agent tools and adapter-native BrowserDriver calls; adapter writes
+wait for the same `approve` / `reject` decision before execution. `confirm_all` also gates browser
+state changes. `never` opts out. Action previews hide free-form text and selected values.
+`allowed_domains` restricts browser destinations to listed hostnames and their subdomains; leaving
+the list empty keeps the global URL-safety rules.
+
+## Scheduled workflows
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/schedules` | List the caller's organization's schedules. |
+| POST | `/schedules` | Create `{title, kind, instructions, platform_key, browser_session_id?, priority, run_at, repeat_interval_minutes?, config{agent_mode, approval_mode, allowed_domains[]}}`. `run_at` must include a timezone and be in the future. At least one exact allowed hostname is required; `approval_mode=never` is rejected. |
+| PATCH | `/schedules/{id}` | Pause/resume, change `run_at`, or change `repeat_interval_minutes`. |
+| DELETE | `/schedules/{id}` | Remove the schedule; previously dispatched tasks remain. |
+
+Workers dispatch due schedules idempotently into the normal persistent task queue. Recurring runs
+skip overlapping intervals rather than backfilling missed runs. Queue-capacity pressure defers a due
+schedule. The API/UI supports one-time, hourly, six-hourly, daily, and weekly cadences; the API
+accepts 15–10,080-minute intervals. Schedules always use the generic agent and its domain/action
+policy. A schedule cannot disable approval.
 
 ## Projects, scenes, assets, characters
 
@@ -78,8 +108,10 @@ target_duration_seconds?}` · `GET /projects/{id}/estimate` · `GET /projects/{i
   local_hour?}}` → `{reply, intent, ok, actions[], navigate?, confirm{title, detail, command}?,
   client{action, value}?, data}`. Irreversible intents (STOP EVERYTHING, CLEAR MEMORY, QUEUE
   BROWSER TASK) return `confirm` first; resend the same text with `confirmed: true`.
-* `GET /assistant/briefing?local_hour=`, `GET /assistant/capabilities`, `GET /assistant/system`
+* `GET /assistant/briefing?local_hour=`, `GET /assistant/capabilities`, `GET /assistant/skills`
+  (live built-in browser/filesystem/task tool schemas and approval classifications), `GET /assistant/system`
   (host metrics), `GET/POST/DELETE /assistant/memory[/{id}]` (POST refuses secrets with 422).
+  The skill catalog is read-only; only version-controlled handlers are executable (no arbitrary plugin loader).
 
 ## Realtime
 
@@ -93,8 +125,8 @@ target_duration_seconds?}` · `GET /projects/{id}/estimate` · `GET /projects/{i
   session_id, project_id, scene_id, payload, created_at}`.
 * **SSE `/api/events`** — the same organisation events for clients without WebSockets.
 
-Event names: `task.created|queued|started|paused|resumed|progress|attention|completed|failed|
+Event names: `task.created|queued|started|paused|resumed|progress|attention|approval|completed|failed|
 cancelled|updated`, `scene.started|updated|completed|failed|skipped`, `agent.action|thought`,
 `browser.navigation|screenshot|status`, `session.updated`, `download.started|completed|failed`,
-`human.takeover|released|required`, `file.created|deleted`, `project.updated`, `worker.status`,
-`notification`.
+`human.takeover|released|required`, `file.created|deleted`, `schedule.created|updated|deleted|dispatched`,
+`storage.quota_warning`, `project.updated`, `worker.status`, `notification`.

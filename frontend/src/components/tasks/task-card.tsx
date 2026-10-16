@@ -19,12 +19,15 @@ export function AttentionBanner({ task, className }: { task: Task; className?: s
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-hud-amber" />
         <div className="min-w-0 flex-1">
           <p className="hud-title text-hud-amber">
-            {task.human_control ? "Human control" : att.kind === "login" ? "Login required" : att.kind === "verification" ? "Verification required" : att.kind === "blocked" ? "Blocked by the platform" : "Needs attention"}
+            {att.kind === "approval" ? "Action approval required" : task.human_control ? "Human control" : att.kind === "login" ? "Login required" : att.kind === "verification" ? "Verification required" : att.kind === "blocked" ? "Blocked by the platform" : "Needs attention"}
             {att.scene_code ? ` · ${att.scene_code}` : ""}
           </p>
-          <p className="mt-1 text-xs text-foreground">{task.human_control ? "You are driving the browser. Finish the step (login, CAPTCHA, verification…) and return control to the agent." : att.reason || task.error || "The agent paused and is waiting for you."}</p>
+          <p className="mt-1 text-xs text-foreground">{att.kind === "approval" ? "The browser agent is paused before a potentially mutating action." : task.human_control ? "You are driving the browser. Finish the step (login, CAPTCHA, verification…) and return control to the agent." : att.reason || task.error || "The agent paused and is waiting for you."}</p>
+          {att.pending_action ? (
+            <pre className="mt-2 max-h-32 overflow-auto border border-border bg-hud-dark p-2 font-mono text-[10px] text-hud-med">{JSON.stringify(att.pending_action, null, 2)}</pre>
+          ) : null}
           <p className="mt-1 text-[10px] text-muted-foreground">
-            CAPTCHA, MFA and logins are never bypassed — take over, complete the step yourself, then return control. {att.since ? `Waiting ${timeAgo(att.since)}.` : ""}
+            {att.kind === "approval" ? "Review the tool and target before approving. Free-form text and selected values are hidden for privacy; rejecting stops this task without running the action." : "CAPTCHA, MFA and logins are never bypassed — take over, complete the step yourself, then return control."} {att.since ? `Waiting ${timeAgo(att.since)}.` : ""}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <TaskControls task={task} sceneId={att.scene_id} />
@@ -71,7 +74,13 @@ export function TaskRow({ task, showControls = true, dragHandle, className }: { 
         </div>
         {progress.total ? <Progress value={percent} className="mt-1.5 h-1" /> : null}
       </div>
-      {showControls ? <TaskControls task={task} compact /> : null}
+      {showControls ? (
+        task.attention?.kind === "approval" ? (
+          <Link href={`/tasks/${task.id}`} className="shrink-0 border border-hud-amber px-2 py-1 font-sans text-[9px] font-bold uppercase tracking-[0.12em] text-hud-amber hover:bg-hud-amber/10">
+            Review approval
+          </Link>
+        ) : <TaskControls task={task} compact />
+      ) : null}
     </div>
   );
 }

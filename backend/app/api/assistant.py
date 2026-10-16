@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
+from app.agent.tools import build_default_registry
 from app.core.config import get_settings
 from app.core.deps import DB, CurrentAuth, require_role
 from app.core.errors import NotFoundError
@@ -106,6 +107,12 @@ async def capabilities(auth: CurrentAuth) -> dict:
         "assistant_name": assistant_service.assistant_name(auth),
         "user_name": assistant_service.honorific(auth),
     }
+
+
+@router.get("/skills", response_model=list[dict])
+async def skills(auth: CurrentAuth) -> list[dict]:
+    """List the versioned built-in browser-agent skills and their approval classification."""
+    return build_default_registry().catalog()
 
 
 @router.get("/memory", response_model=list[MemoryOut])

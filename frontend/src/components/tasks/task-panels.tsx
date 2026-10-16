@@ -107,7 +107,6 @@ export function ScreenshotHistory({ taskId, className }: { taskId: string; class
     <div className={cn("grid grid-cols-2 gap-2 overflow-y-auto p-2 md:grid-cols-3", className)}>
       {list.map((s) => (
         <button key={s.id} type="button" onClick={() => setActive(s)} className="group border border-border text-left hover:border-primary">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={s.image.url} alt={s.stage} loading="lazy" className="aspect-video w-full bg-black object-cover object-top" />
           <div className="px-1.5 py-1 font-sans text-[9px] uppercase tracking-[0.1em] text-muted-foreground group-hover:text-primary">
             <p className="truncate">{s.stage}</p>
@@ -120,7 +119,6 @@ export function ScreenshotHistory({ taskId, className }: { taskId: string; class
           <DialogTitle>{active?.stage} · {active ? formatTime(active.created_at) : ""}</DialogTitle>
           {active ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={active.image.url} alt={active.stage} className="max-h-[70vh] w-full border border-border bg-black object-contain" />
               <p className="truncate font-sans text-[10px] text-muted-foreground">{active.title} · {active.url}</p>
             </>

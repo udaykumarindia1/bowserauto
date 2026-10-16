@@ -15,7 +15,13 @@ from typing import Any
 
 from app.agent.heuristic import HeuristicPlanner
 from app.agent.llm import LLMClient, LLMMessage, LLMUnavailable
-from app.agent.tools import ToolContext, ToolRegistry, ToolResult, build_default_registry
+from app.agent.tools import (
+    ToolContext,
+    ToolRegistry,
+    ToolResult,
+    build_default_registry,
+    sanitize_action_args,
+)
 from app.browser.driver import PageSnapshot
 from app.core.errors import HumanInterventionRequired
 from app.core.logging import redact
@@ -31,8 +37,9 @@ Rules:
 3. Never attempt to bypass, solve or automate CAPTCHAs, MFA/2FA, phone/email verification, consent walls, paywalls or any security control. If you encounter one, or if the site requires logging in, call task.needs_human with a clear reason.
 4. Do not enter passwords or payment details. Do not navigate to unrelated sites.
 5. Keep "reasoning" to one short sentence describing what you see and what you are doing (e.g. "Generation button detected, starting generation."). Do not reveal internal deliberation.
-6. When the goal is achieved call task.complete (include download_path when you downloaded a file). If it is impossible call task.fail.
-7. Reply with ONLY a JSON object: {"reasoning": "...", "tool": "tool.name", "args": {...}}.
+6. Use task.undo only to reverse the most recent explicit browser.open navigation when the page has not changed since; it cannot reverse clicks, submissions, purchases, or other external side effects.
+7. When the goal is achieved call task.complete (include download_path when you downloaded a file). If it is impossible call task.fail.
+8. Reply with ONLY a JSON object: {"reasoning": "...", "tool": "tool.name", "args": {...}}.
 """
 
 
@@ -110,7 +117,12 @@ class BrowserAgent:
                 result = await self.registry.execute(self.ctx, tool_name, args)
                 result.data.setdefault("duration_ms", int((time.perf_counter() - started) * 1000))
             step = AgentStep(
-                step_index, tool_name, redact(args), reasoning, result, int(result.data.get("duration_ms", 0))
+                step_index,
+                tool_name,
+                sanitize_action_args(args),
+                reasoning,
+                result,
+                int(result.data.get("duration_ms", 0)),
             )
             history.append(step)
             if self.on_step:

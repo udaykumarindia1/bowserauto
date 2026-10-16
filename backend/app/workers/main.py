@@ -30,12 +30,14 @@ from sqlalchemy import or_, select, update
 from app.core.config import get_settings
 from app.core.database import session_scope
 from app.core.logging import configure_logging
+from app.core.security import try_decrypt_secret
 from app.models import BrowserSession, BrowserSessionStatus, Organization, Task, TaskControl, TaskStatus
 from app.queue.control import ControlToken
 from app.realtime.bus import WORKER_WAKEUP, get_bus, start_bus, stop_bus
 from app.realtime.events import emit, publish_event
 from app.services.org_settings import effective_limits
 from app.workers.executor import TaskExecutor
+from app.workers.schedules import dispatch_due_schedules
 from app.workers.session_host import SessionHost
 
 logger = logging.getLogger(__name__)
@@ -125,6 +127,7 @@ class Worker:
     async def run_forever(self) -> None:
         last_heartbeat = 0.0
         last_recovery = 0.0
+        last_schedule_check = 0.0
         loop = asyncio.get_running_loop()
         while not self._stopping:
             try:
@@ -132,6 +135,9 @@ class Worker:
                 if now - last_recovery > max(10.0, self.settings.worker_stale_after_seconds / 2):
                     await self._recover_stale()
                     last_recovery = now
+                if now - last_schedule_check >= 5.0:
+                    await dispatch_due_schedules()
+                    last_schedule_check = loop.time()
                 await self._apply_controls()
                 await self._reconcile_sessions()
                 await self._reap_finished()
@@ -188,6 +194,14 @@ class Worker:
                         other = await db.get(Task, session.locked_by_task_id)
                         if other is not None and other.status in RUNNING_STATUSES:
                             continue
+                # Serialize capacity reservations across workers on PostgreSQL. The lock remains
+                # held through the conditional task claim and transaction commit, so another
+                # worker cannot count the same free organization slot concurrently.
+                org = (
+                    await db.execute(select(Organization).where(Organization.id == org_id).with_for_update())
+                ).scalar_one_or_none()
+                if org is None:
+                    continue
                 if org_id not in org_running:
                     rows = (
                         (
@@ -203,7 +217,6 @@ class Worker:
                         .all()
                     )
                     org_running[org_id] = len(rows)
-                org = await db.get(Organization, org_id)
                 if org_running[org_id] >= effective_limits(org)["max_concurrent_tasks"]:
                     continue
                 result = await db.execute(
@@ -271,14 +284,38 @@ class Worker:
             run = self.runs.get(task_id)
             if run is None:
                 continue
+            values: dict[str, Any] = {"control": TaskControl.none.value}
+            is_approval = control in (TaskControl.approve_action.value, TaskControl.reject_action.value)
+            if is_approval:
+                values.update(
+                    status=TaskStatus.running.value,
+                    attention={},
+                    human_control=False,
+                    paused_at=None,
+                    current_action=(
+                        "Approval received; executing the action"
+                        if control == TaskControl.approve_action.value
+                        else "Action rejected; stopping task"
+                    ),
+                )
             async with session_scope() as db:
                 result = await db.execute(
                     update(Task)
-                    .where(Task.id == task_id, Task.control == control)
-                    .values(control=TaskControl.none.value)
+                    .where(Task.id == task_id, Task.control == control, Task.status == status)
+                    .values(**values)
                 )
+                if result.rowcount == 1 and is_approval:
+                    approved = control == TaskControl.approve_action.value
+                    await emit(
+                        db,
+                        "task.approval",
+                        run.org_id,
+                        "Action approval accepted" if approved else "Action rejection accepted",
+                        task_id=task_id,
+                        payload={"approved": approved, "status": TaskStatus.running.value},
+                    )
             if result.rowcount != 1:
-                continue  # somebody else consumed it
+                continue  # somebody else consumed it or the task changed state
             try:
                 await self._apply_control(run, control, status)
             except Exception:
@@ -351,6 +388,10 @@ class Worker:
                 await db.execute(update(Task).where(Task.id == run.task_id).values(human_control=False))
             if not token.request_resume():
                 await self._mark_running(run, "Control returned to the agent")
+        elif control == TaskControl.approve_action.value:
+            token.resolve_approval(True)
+        elif control == TaskControl.reject_action.value:
+            token.resolve_approval(False)
         elif control == TaskControl.skip_scene.value:
             if host and host.interactive:
                 await host.set_interactive(False)
@@ -404,9 +445,12 @@ class Worker:
                 if session is None:
                     raise RuntimeError("Browser session no longer exists")
                 profile_dir = Path(session.profile_dir)
-                start_url = session.start_url
+                metadata = dict(session.metadata_ or {})
+                encrypted_start_url = try_decrypt_secret(metadata.get("start_url_encrypted"))
+                encrypted_open_url = try_decrypt_secret(metadata.get("open_url_encrypted"))
+                start_url = encrypted_start_url or session.start_url
+                open_url = encrypted_open_url
                 encrypted = session.storage_state_encrypted
-                open_url = (session.metadata_ or {}).get("open_url")
                 interactive = bool(session.interactive)
                 await db.execute(
                     update(BrowserSession)
@@ -436,7 +480,7 @@ class Worker:
                     session = await db.get(BrowserSession, session_id)
                     if session:
                         session.metadata_ = {
-                            k: v for k, v in (session.metadata_ or {}).items() if k != "open_url"
+                            k: v for k, v in (session.metadata_ or {}).items() if k != "open_url_encrypted"
                         }
             self.hosts[session_id] = host
             return host

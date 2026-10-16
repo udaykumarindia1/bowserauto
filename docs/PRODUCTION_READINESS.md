@@ -3,9 +3,14 @@
 This document records implementation-phase verification from the original build; it is **not**
 a production-readiness certification. "Verified" below means exercised in this repository by
 automated tests or the smoke scripts (real Chromium against the built-in mock platform) — never
-against real AI platforms. The independent audit dated 2026-10-16 is in
+against real AI platforms. The project/repository audit dated 2026-10-16 is in
 [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) and documents unresolved high-priority risks. Production
 readiness is **not certified** until those findings are addressed and re-tested.
+
+The 1–15 table below is the historical product-build sequence, not the separate security/reliability
+roadmap requested for Phases 0–3. Current implementation evidence and remaining deployment-dependent
+gaps for Phases 0–3 are tracked in [`ROADMAP_STATUS.md`](ROADMAP_STATUS.md). Do not infer production
+readiness from completion of these product-build milestones.
 
 ## Phases
 
@@ -23,7 +28,7 @@ readiness is **not certified** until those findings are addressed and re-tested.
 | 10 | Per-scene generation workflow with smart state detection, retries, recovery, verification, naming | done | `test_video_task_completes_and_files_are_verified`, `test_retry_with_backoff_then_success`, `test_failure_after_retries_needs_attention_then_skip` |
 | 11 | Generic AI browser agent with tool calling (browser.*/filesystem.*/task.*) and heuristic fallback | done | `app/agent`, `test_verification_challenge_is_never_bypassed` |
 | 12 | Files, signed URLs, export, dashboard, activity stream, notifications | done | `test_generated_files_listing_and_deletion`, `test_templates_platforms_notifications_dashboard` |
-| 13 | Frontend: all pages, three-panel workspace, AVINASH HUD, voice, customisation | done | `scripts/ui_snapshots.py` (11 routes, zero console errors), `/tmp/ui_flow` E2E |
+| 13 | Frontend: all pages, three-panel workspace, AVINASH HUD, voice, customisation, Skills catalog and phone pairing | done | Frontend lint/typecheck/build; dedicated skills and device-pairing routes; real-browser UI snapshots still need a target-host run |
 | 14 | Security hardening, limits, observability, env separation, Docker Compose | done | `docs/SECURITY.md`, `docs/OPERATIONS.md`, `docker-compose.yml` |
 | 15 | Initial audit (§44) + bug fixing | initial review complete; independent follow-up open | `docs/PROJECT_AUDIT.md` |
 
@@ -50,7 +55,7 @@ and smoke-test entries do not imply exhaustive route coverage or a production-sa
 | Observability | structured logs with task/session ids and durations; `X-Request-ID`; activity + audit tables |
 | Cost/limits | server ceilings + per-org limits (duration, retries, scenes, concurrency, sessions, file size, rate limit) enforced (`test_task_limits_enforced`, `test_settings_limits_and_members`) |
 | LLM provider safety | OpenAI-compatible, Gemini, Ollama and Anthropic adapters tested with mocked transports; org-selected endpoints cannot inherit the server API key; provider URL restrictions and the admin-only connection test are covered by tests |
-| Lint/type/test gates | `ruff check`, `ruff format --check`, `pytest` (97 passed), `tsc --noEmit`, `eslint src`, `next build` |
+| Lint/type/test gates | Current verification: Ruff check/format, pytest (131 passed), `tsc --noEmit`, `eslint src`, `next build`, `npm audit --audit-level=high` (zero vulnerabilities) |
 | Docker Compose | frontend, backend, worker, browser-worker, postgres, redis (+ optional nginx), health checks on all services. Written and syntax-validated; **not executed in the authoring sandbox (no Docker daemon)** — run `docker compose up` once on the target host before go-live |
 
 ## Bugs found and fixed during the audit

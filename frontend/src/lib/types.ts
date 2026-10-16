@@ -31,6 +31,31 @@ export interface AuthResponse {
   organizations: { organization: Organization; role: Role }[];
 }
 
+export type DevicePairingStatus = "pending" | "claimed" | "approved" | "completed" | "rejected" | "expired";
+
+export interface DevicePairing {
+  id: string;
+  status: DevicePairingStatus;
+  expires_at: string;
+  device_name: string;
+  user_agent: string;
+  claimed_at: string | null;
+  approved_at: string | null;
+}
+
+export interface AgentSkill {
+  name: string;
+  category: string;
+  description: string;
+  risk: "read-only" | "state-change" | "write" | "task-control";
+  approval: string;
+  parameters: {
+    type?: string;
+    required?: string[];
+    properties?: Record<string, { type?: string; description?: string; items?: unknown }>;
+  };
+}
+
 export interface OutputSettings {
   resolution: string;
   aspect_ratio: string;
@@ -152,6 +177,7 @@ export interface TaskAttention {
   scene_code?: string | null;
   options?: string[];
   since?: string;
+  pending_action?: { tool: string; args: Record<string, unknown> };
 }
 
 export interface TaskConfig {
@@ -163,7 +189,30 @@ export interface TaskConfig {
   retry_failed_only: boolean;
   headless: boolean | null;
   agent_mode: "auto" | "adapter" | "generic";
+  approval_mode: "confirm_writes" | "confirm_all" | "never";
+  allowed_domains: string[];
   mock_options: Record<string, unknown>;
+}
+
+export interface TaskSchedule {
+  id: string;
+  organization_id: string;
+  created_by: string | null;
+  title: string;
+  kind: string;
+  instructions: string;
+  platform_key: string;
+  browser_session_id: string | null;
+  priority: number;
+  config: Partial<TaskConfig> & Record<string, unknown>;
+  next_run_at: string;
+  repeat_interval_minutes: number | null;
+  enabled: boolean;
+  last_run_at: string | null;
+  last_task_id: string | null;
+  last_error: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Task {

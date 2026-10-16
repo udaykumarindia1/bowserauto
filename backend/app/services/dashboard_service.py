@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -35,6 +36,14 @@ async def dashboard(db: AsyncSession, org: Organization) -> dict[str, Any]:
                 select(Project.id).where(Project.organization_id == org_id, Project.status == "active")
             )
         )
+        .scalars()
+        .all()
+    )
+    storage_project_ids = (
+        (await db.execute(select(Project.id).where(Project.organization_id == org_id))).scalars().all()
+    )
+    unscoped_task_ids = (
+        (await db.execute(select(Task.id).where(Task.organization_id == org_id, Task.project_id.is_(None))))
         .scalars()
         .all()
     )
@@ -125,6 +134,9 @@ async def dashboard(db: AsyncSession, org: Organization) -> dict[str, Any]:
         )
     ).scalar_one()
     limits = effective_limits(org)
+    storage = await asyncio.to_thread(
+        storage_summary, list(storage_project_ids), list(unscoped_task_ids), limits["max_storage_mb"]
+    )
     return {
         "tasks": {
             "active": sum(task_counts.get(s, 0) for s in active_statuses),
@@ -171,7 +183,7 @@ async def dashboard(db: AsyncSession, org: Organization) -> dict[str, Any]:
             "tasks_failed": int(failed_week),
         },
         "limits": limits,
-        "storage": storage_summary(list(project_ids)),
+        "storage": storage,
         "active_tasks": active_tasks,
         "recent_tasks": recent_tasks,
         "recent_activity": recent_activity,

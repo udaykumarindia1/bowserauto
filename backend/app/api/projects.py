@@ -6,7 +6,8 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app.core.deps import DB, CurrentAuth, require_role
 from app.core.errors import ConflictError, NotFoundError
@@ -155,20 +156,18 @@ async def delete_project(
 
 
 @router.get("/{project_id}/export")
-async def export_project(project_id: uuid.UUID, auth: CurrentAuth, db: DB) -> StreamingResponse:
+async def export_project(project_id: uuid.UUID, auth: CurrentAuth, db: DB) -> FileResponse:
     project = await project_service.get_project(db, auth.org_id, project_id)
     scenes = [
         SceneOut.model_validate(s).model_dump(mode="json")
         for s in await project_service.list_scenes(db, project.id)
     ]
-    data, filename = await file_service.build_project_zip(db, project, scenes=scenes)
-    return StreamingResponse(
-        iter([data]),
+    archive, filename = await file_service.build_project_zip(db, project, scenes=scenes)
+    return FileResponse(
+        archive,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(data)),
-        },
+        filename=filename,
+        background=BackgroundTask(archive.unlink, missing_ok=True),
     )
 
 

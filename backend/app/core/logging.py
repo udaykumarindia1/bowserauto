@@ -7,6 +7,7 @@ they never end up in log aggregation systems.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import re
@@ -15,6 +16,8 @@ import time
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
+
+from app.core.url_safety import sanitize_text
 
 _log_context: ContextVar[dict[str, Any] | None] = ContextVar("log_context", default=None)
 
@@ -42,7 +45,7 @@ def redact(value: Any, depth: int = 0) -> Any:
         out = value
         for pattern in SENSITIVE_VALUE_PATTERNS:
             out = pattern.sub(r"\1***", out)
-        return out
+        return sanitize_text(out)
     return value
 
 
@@ -85,7 +88,10 @@ class JsonFormatter(logging.Formatter):
 
 class ConsoleFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        base = super().format(record)
+        safe_record = copy.copy(record)
+        safe_record.msg = redact(record.getMessage())
+        safe_record.args = ()
+        base = super().format(safe_record)
         extras = {
             k: v
             for k, v in record.__dict__.items()

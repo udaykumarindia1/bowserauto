@@ -58,6 +58,8 @@ def _view(auth) -> OrgSettingsOut:  # noqa: ANN001
                 "max_scenes_per_task": settings.max_scenes_per_task,
                 "max_browser_sessions_per_org": settings.max_browser_sessions_per_org,
                 "max_generated_file_size_mb": settings.max_generated_file_size_mb,
+                "max_storage_per_org_mb": settings.max_storage_per_org_mb,
+                "max_scheduled_workflows_per_org": settings.max_scheduled_workflows_per_org,
                 "max_concurrent_tasks_per_worker": settings.max_concurrent_tasks_per_worker,
             },
         },

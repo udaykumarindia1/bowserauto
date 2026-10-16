@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import ipaddress
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class ORMModel(BaseModel):
@@ -252,7 +254,41 @@ class TaskConfig(BaseModel):
     retry_failed_only: bool = False
     headless: bool | None = None
     agent_mode: Literal["auto", "adapter", "generic"] = "auto"
+    # Browser mutations pause for per-action approval unless explicitly disabled.
+    approval_mode: Literal["confirm_writes", "confirm_all", "never"] = "confirm_writes"
+    allowed_domains: list[str] = Field(default_factory=list, max_length=100)
     mock_options: dict[str, Any] = {}
+
+    @field_validator("allowed_domains")
+    @classmethod
+    def _validate_allowed_domains(cls, values: list[str]) -> list[str]:
+        normalized = []
+        for value in values:
+            domain = value.strip().lower().rstrip(".")
+            try:
+                domain = domain.encode("idna").decode("ascii")
+            except UnicodeError as exc:
+                raise ValueError("Allowed domains must be valid hostnames") from exc
+            if not domain or "*" in domain or ":" in domain or "/" in domain:
+                raise ValueError(
+                    "Allowed domains must be exact hostnames (no scheme, port, path, or wildcard)"
+                )
+            try:
+                ipaddress.ip_address(domain)
+            except ValueError:
+                pass
+            else:
+                raise ValueError("Allowed domains must be hostnames, not IP addresses")
+            labels = domain.split(".")
+            if (
+                len(domain) > 253
+                or len(labels) < 2
+                or any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in labels)
+            ):
+                raise ValueError("Allowed domains must be valid fully-qualified hostnames")
+            if domain not in normalized:
+                normalized.append(domain)
+        return normalized
 
 
 class TaskCreate(BaseModel):
@@ -280,6 +316,69 @@ class TaskUpdate(BaseModel):
     priority: int | None = Field(default=None, ge=1, le=10)
     instructions: str | None = Field(default=None, max_length=20_000)
     config: TaskConfig | None = None
+
+
+class TaskScheduleCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    kind: Literal["browser_workflow", "research", "data_entry", "website_testing", "content_creation"] = (
+        "browser_workflow"
+    )
+    instructions: str = Field(min_length=1, max_length=20_000)
+    platform_key: str = Field(default="generic", max_length=60)
+    browser_session_id: uuid.UUID | None = None
+    priority: int = Field(default=5, ge=1, le=10)
+    run_at: datetime
+    repeat_interval_minutes: int | None = Field(default=None, ge=15, le=10_080)
+    config: TaskConfig = Field(default_factory=TaskConfig)
+
+    @field_validator("run_at")
+    @classmethod
+    def _require_aware_run_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("run_at must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def _require_safe_schedule_policy(self) -> TaskScheduleCreate:
+        if not self.config.allowed_domains:
+            raise ValueError("Scheduled workflows require at least one allowed domain")
+        if self.config.approval_mode == "never":
+            raise ValueError("Scheduled workflows cannot disable action approval")
+        return self
+
+
+class TaskScheduleUpdate(BaseModel):
+    enabled: bool | None = None
+    run_at: datetime | None = None
+    repeat_interval_minutes: int | None = Field(default=None, ge=15, le=10_080)
+
+    @field_validator("run_at")
+    @classmethod
+    def _require_aware_update_run_at(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("run_at must include a timezone")
+        return value
+
+
+class TaskScheduleOut(ORMModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    created_by: uuid.UUID | None
+    title: str
+    kind: str
+    instructions: str
+    platform_key: str
+    browser_session_id: uuid.UUID | None
+    priority: int
+    config: dict[str, Any]
+    next_run_at: datetime
+    repeat_interval_minutes: int | None
+    enabled: bool
+    last_run_at: datetime | None
+    last_task_id: uuid.UUID | None
+    last_error: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class TaskOut(ORMModel):

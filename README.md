@@ -28,23 +28,26 @@ customisable colours and assistant name) that ports the *functionality* of
 
 | Area | What is implemented |
 | --- | --- |
-| AI task agent | Tool-based browser agent (`browser.*`, `filesystem.*`, `task.*` tools), provider-neutral planner with OpenAI-compatible presets (OpenAI, OpenRouter, Groq, DeepSeek, Together, Fireworks, Mistral, xAI), native Gemini/Ollama/Anthropic adapters, encrypted org keys, health test, and deterministic heuristic fallback |
+| AI task agent | Self-describing browser/filesystem/task tools and a searchable Skills catalog, provider-neutral planner, encrypted org keys, health test, and deterministic heuristic fallback; `task.undo` only compensates an unchanged explicit navigation (not external side effects) |
 | Browser automation | Playwright/Chromium driven by **workers** (never inside the API), persistent per-session profiles (mode 0700 on the shared data volume; live files are not application-encrypted, while Fernet covers stored state snapshots), CDP screencast streamed over WebSocket (not repeated screenshots), URL/title/action indicators, tabs, uploads |
 | Human takeover | **TAKE OVER BROWSER** pauses the agent and gives you click/type/scroll/paste/upload control in the live viewer; **RETURN CONTROL TO AI** re-inspects page state and resumes. CAPTCHA/MFA/logins are never bypassed |
+| Mobile pairing | Settings → Devices generates a two-minute QR pairing request; the signed-in device approves before the phone receives its own revocable HttpOnly app session |
+| Agent policy & approvals | Task-level browser-domain allowlists; generic-agent and adapter-native browser writes pause for authenticated approve/reject decisions by default; `confirm_all` also gates browser state changes; sensitive input values are hidden in approval previews |
+| Scheduled workflows | Persistent one-time/recurring generic browser tasks with exact host allowlists, approval modes, pause/resume/delete, idempotent worker dispatch, and no overlapping runs |
 | Task queue | DB-persisted queue with priority (1–10), reorder, pause/resume/stop/retry/skip, STOP EVERYTHING, atomic claims, heartbeats and crash recovery (queue survives restarts) |
 | Script → scenes | LLM or heuristic script analysis into editable scenes (reorder, duplicate, delete, edit prompt/visual/camera/dialogue, per-scene platform, reference images, regenerate prompt) |
 | Scene generation | open platform → verify login → upload references → prompt → configure → generate → **smart state detection** (`QUEUED/GENERATING/PROCESSING/COMPLETED/DOWNLOAD_READY/DOWNLOADING/SUCCESS/FAILED/RETRYING/BLOCKED/WAITING_FOR_HUMAN`) with configurable timeouts, no blind sleeps → download → verify → rename `scene_001.mp4` → metadata |
 | Retry & recovery | Configurable retries with backoff, non-retryable error detection, then pause with **Retry / Edit / Skip / Take over**; "no silent task death" |
 | Platform adapters | Plugin registry under `backend/app/platforms/` (13 adapters + `mock`), generic AI agent fallback, per-org enable/disable, verified-selector flag |
-| Files | `/projects/{id}/{script,references,scenes,generated,final,logs}`, signed expiring download/preview URLs, zip export |
+| Files | `/projects/{id}/{script,references,scenes,generated,final,logs}`, signed expiring download/preview URLs, disk-backed streamed ZIP export, per-file and per-organization quotas |
 | Realtime | WebSocket + SSE event stream (task/scene/agent/browser/session/download/human/file/notification events), screenshot history, agent decision panel |
 | Multi-tenancy & security | Organisations, roles (owner/admin/member/viewer), Argon2 passwords, HttpOnly cookie sessions + CSRF, rate limiting, audit log, Fernet-encrypted secrets, tenant-scoped queries, signed URLs, WS auth, production start-up guards |
 | Notifications | In-app + native browser notifications; email / Telegram / generic webhook (WhatsApp gateways, Slack) through env vars |
 | Observability | Structured logs (`timestamp, task_id, session_id, action, result, duration, error`), request IDs, activity + audit tables, health endpoint, worker liveness files |
-| Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, timeouts) with server ceilings and pre-run estimates |
+| Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, storage quota, timeouts) with server ceilings, 80% storage alerts, and pre-run estimates |
 | Templates | Built-in (AI Video Generation, Image Generation, Research, Data Entry, Website Testing, Content Creation, Browser Workflow) + custom |
 | Dev mode | Built-in **Mock Video Generator** (`/mock-platform`) with configurable speed, failure rate, login and human-check simulation for end-to-end runs without AI credits |
-| Tests | 97 backend tests (including mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
+| Tests | 131 backend tests (including pairing/approval flows and mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
 
 ---
 
@@ -85,7 +88,8 @@ download, `.env` and migrations idempotently.
 cp .env.example .env
 #   SECRET_KEY:      python -c "import secrets; print(secrets.token_urlsafe(48))"
 #   ENCRYPTION_KEY:  cd backend && python -m app.core.security gen-key
-#   POSTGRES_PASSWORD, PUBLIC_BASE_URL, ALLOWED_ORIGINS, COOKIE_SECURE=true behind HTTPS
+#   POSTGRES_PASSWORD, PUBLIC_BASE_URL, ALLOWED_ORIGINS, TRUSTED_HOSTS, COOKIE_SECURE=true behind HTTPS
+#   ALLOW_REGISTRATION=false (first-owner bootstrap works until the first user exists)
 docker compose up -d --build
 docker compose --profile proxy up -d      # optional nginx front door (deploy/nginx.conf)
 ```
@@ -103,35 +107,35 @@ backups and upgrades.
 ```
 backend/
   app/
-    api/            FastAPI routers (auth, tasks, projects, sessions, files, platforms, templates,
-                    activity, audit, notifications, settings, dashboard, assistant, realtime)
+    api/            FastAPI routers (auth, tasks, schedules, projects, sessions, files, platforms,
+                    templates, activity, audit, notifications, settings, dashboard, assistant, realtime)
     agent/          BrowserAgent, tool registry (browser.* / filesystem.* / task.*), LLM clients,
                     heuristic planner
     browser/        Playwright driver (CDP screencast, input injection, downloads), fake driver,
                     launcher (bundled Chromium support)
     core/           settings, logging, security (Argon2, Fernet, signed URLs), database, errors,
                     rate limiting, dependencies, system metrics
-    models/         SQLAlchemy models (21 tables, multi-tenant)
+    models/         SQLAlchemy multi-tenant, identity and workflow models
     platforms/      PlatformAdapter base + 13 adapters + mock; registry
     queue/          control tokens (pause/resume/stop/takeover/…)
     realtime/       event bus (in-memory / Redis), event catalogue, WebSocket + SSE
     schemas/        Pydantic request/response models
-    services/       business logic (tasks, projects, sessions, files, dashboard, assistant,
-                    notifications, org settings, templates)
-    workers/        Worker loop, TaskExecutor, SessionHost, health check
+    services/       business logic (tasks, schedules, projects, sessions, files, dashboard,
+                    assistant, notifications, org settings, templates)
+    workers/        Worker loop, TaskExecutor, SessionHost, schedule dispatcher, health check
     mock_platform/  the Mock Video Generator web app
   alembic/          migrations
   tests/            pytest suite (fake browser backend, no real AI calls)
 frontend/
   src/app/          Next.js App Router pages (dashboard, new-task, projects, sessions, tasks,
-                    files, platforms, templates, activity, settings, auth)
+                    schedules, files, platforms, skills, templates, activity, settings, pair, auth)
   src/components/   hud/ (AVINASH core, console, sys monitor, customise, memory), browser/
                     (live viewer), tasks/, scenes/, layout/, ui/
   src/lib/          typed API client, realtime client, stores, theme, voice, utils
   server.mjs        single-origin proxy (dev + prod)
 deploy/nginx.conf   reverse proxy example
 docker-compose.yml  full stack
-scripts/            dev_setup, dev_api, fetch_chromium, smoke_e2e, smoke_controls, ui_snapshots
+scripts/            dev_setup, dev_api, fetch_chromium, backup (GPG encrypted), smoke_e2e, smoke_controls, ui_snapshots
 docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, TESTING, ASSISTANT,
                     PRODUCTION_READINESS
 ```
@@ -149,12 +153,13 @@ docs/               ARCHITECTURE, SECURITY, PLATFORM_ADAPTERS, OPERATIONS, API, 
 * [docs/TESTING.md](docs/TESTING.md) — test strategy and commands
 * [docs/ASSISTANT.md](docs/ASSISTANT.md) — AVINASH assistant: HUD, voice, memory, customisation; Mark-LV feature mapping
 * [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — implementation phases 1–15 and prior verification notes
-* [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) — independent audit findings, limitations, and prioritized enhancements
+* [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) — project/repository audit findings, remediation status, and limitations
+* [docs/ROADMAP_STATUS.md](docs/ROADMAP_STATUS.md) — current Phase 0–3 implementation and remaining gaps
 
 ## Non-negotiables baked into the design
 
 * The agent never bypasses CAPTCHA, MFA, logins, payments or anti-bot systems — it pauses and asks you.
-* Passwords for third-party platforms are never requested or stored. Raw browser cookie stores are not sent to the frontend; current URLs are exposed for live monitoring and may contain token-like query/fragment values (see the audit finding on URL redaction).
+* Passwords for third-party platforms are never requested or stored. Raw browser cookie stores are not sent to the frontend; browser URLs are sanitized before persistence, events, API display, and agent prompts, while secret-bearing start URLs needed by workers are encrypted at rest.
 * No fixed `sleep(30)` waits — state is detected from the page with configurable timeouts.
 * One scene at a time unless parallel generation is explicitly enabled for a project.
 * Browser automation runs in workers, never inside the API process.

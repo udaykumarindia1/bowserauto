@@ -168,6 +168,8 @@ def dir_size(path: Path) -> int:
     if not path.exists():
         return 0
     for child in path.rglob("*"):
+        if ".incoming" in child.parts or child.is_symlink():
+            continue
         if child.is_file():
             try:
                 total += child.stat().st_size

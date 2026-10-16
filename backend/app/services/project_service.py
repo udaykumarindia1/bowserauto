@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.errors import ConflictError, NotFoundError, ValidationFailed
 from app.models import Asset, Character, GeneratedFile, Project, Scene, SceneStatus, Task, TaskStatus
 from app.platforms.registry import get_adapter_class
+from app.services.file_service import ensure_org_storage_capacity
 from app.services.org_settings import llm_overrides_for
 from app.services.scene_engine import AnalysisContext, AnalysisResult, analyze_script
 from app.storage.files import sha256_file, sniff_kind
@@ -270,11 +271,13 @@ async def save_upload(
         if kind == "script"
         else "references"
     )
-    target = unique_path(folder / safe_filename(original, f"upload{suffix}"))
+    upload_staging = settings.tmp_dir / "uploads"
+    upload_staging.mkdir(parents=True, exist_ok=True)
+    staged = unique_path(upload_staging / safe_filename(original, f"upload{suffix}"))
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     written = 0
     try:
-        with open(target, "wb") as fh:
+        with open(staged, "wb") as fh:
             while True:
                 chunk = await upload.read(1024 * 1024)
                 if not chunk:
@@ -283,16 +286,19 @@ async def save_upload(
                 if written > max_bytes:
                     raise ValidationFailed(f"File exceeds the {settings.max_upload_size_mb} MB upload limit")
                 fh.write(chunk)
+        sniffed = sniff_kind(staged)
+        if suffix in (".png", ".jpg", ".jpeg", ".webp", ".gif") and not sniffed.startswith("image/"):
+            raise ValidationFailed("Uploaded file is not a valid image")
+        if suffix in (".mp4", ".mov", ".webm") and not sniffed.startswith("video/"):
+            raise ValidationFailed("Uploaded file is not a valid video")
+        await ensure_org_storage_capacity(db, project.organization_id, written)
+        target = unique_path(folder / safe_filename(original, f"upload{suffix}"))
+        staged.replace(target)
     except Exception:
-        target.unlink(missing_ok=True)
+        staged.unlink(missing_ok=True)
+        if "target" in locals():
+            target.unlink(missing_ok=True)
         raise
-    sniffed = sniff_kind(target)
-    if suffix in (".png", ".jpg", ".jpeg", ".webp", ".gif") and not sniffed.startswith("image/"):
-        target.unlink(missing_ok=True)
-        raise ValidationFailed("Uploaded file is not a valid image")
-    if suffix in (".mp4", ".mov", ".webm") and not sniffed.startswith("video/"):
-        target.unlink(missing_ok=True)
-        raise ValidationFailed("Uploaded file is not a valid video")
     asset = Asset(
         organization_id=project.organization_id,
         project_id=project.id,

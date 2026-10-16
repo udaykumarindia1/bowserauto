@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.deps import AuthContext
 from app.core.errors import ConflictError, LimitExceededError, NotFoundError, ValidationFailed
+from app.core.security import encrypt_secret
+from app.core.url_safety import UnsafeDestination, require_safe_http_url, sanitize_url
 from app.models import BrowserSession, BrowserSessionStatus, Task, TaskStatus
 from app.platforms.registry import get_adapter_class
 from app.realtime.bus import WORKER_WAKEUP, get_bus, input_channel
@@ -95,8 +97,16 @@ async def create_session(db: AsyncSession, auth: AuthContext, data: dict[str, An
     start_url = (data.get("start_url") or "").strip()
     if not start_url:
         start_url = adapter_cls(None).start_url() if adapter_cls.key != "generic" else ""
-    if start_url and not start_url.lower().startswith(("http://", "https://")):
-        raise ValidationFailed("Start URL must begin with http:// or https://")
+    encrypted_start_url = None
+    if start_url:
+        try:
+            require_safe_http_url(start_url, settings=settings)
+        except UnsafeDestination as exc:
+            raise ValidationFailed(str(exc)) from exc
+        sanitized_start_url = sanitize_url(start_url)
+        if sanitized_start_url != start_url:
+            encrypted_start_url = encrypt_secret(start_url)
+        start_url = sanitized_start_url
     session_id = uuid.uuid4()
     profile_dir = settings.profiles_dir / str(session_id)
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -113,6 +123,7 @@ async def create_session(db: AsyncSession, auth: AuthContext, data: dict[str, An
         status=BrowserSessionStatus.closed.value,
         desired_state="closed",
         expires_at=_now() + timedelta(days=settings.session_expiry_days),
+        metadata_={"start_url_encrypted": encrypted_start_url} if encrypted_start_url else {},
     )
     db.add(session)
     await db.flush()
@@ -131,11 +142,27 @@ async def create_session(db: AsyncSession, auth: AuthContext, data: dict[str, An
 async def update_session(db: AsyncSession, session: BrowserSession, data: dict[str, Any]) -> BrowserSession:
     if "platform_key" in data and data["platform_key"] and get_adapter_class(data["platform_key"]) is None:
         raise ValidationFailed("Unknown platform")
-    if data.get("start_url") and not data["start_url"].lower().startswith(("http://", "https://")):
-        raise ValidationFailed("Start URL must begin with http:// or https://")
+    metadata = dict(session.metadata_ or {})
+    if "start_url" in data and data["start_url"] is not None:
+        raw_url = data["start_url"].strip()
+        if raw_url:
+            try:
+                require_safe_http_url(raw_url)
+            except UnsafeDestination as exc:
+                raise ValidationFailed(str(exc)) from exc
+            stored_url = sanitize_url(raw_url)
+            metadata.pop("start_url_encrypted", None)
+            if stored_url != raw_url:
+                metadata["start_url_encrypted"] = encrypt_secret(raw_url)
+            session.start_url = stored_url
+        else:
+            session.start_url = ""
+            metadata.pop("start_url_encrypted", None)
+        data = {key: value for key, value in data.items() if key != "start_url"}
     for key, value in data.items():
         if value is not None:
             setattr(session, key, value)
+    session.metadata_ = metadata
     await db.commit()
     return session
 
@@ -150,7 +177,11 @@ async def request_open(
     session.interactive = interactive
     session.last_used_at = _now()
     if url:
-        session.metadata_ = {**(session.metadata_ or {}), "open_url": url}
+        try:
+            require_safe_http_url(url)
+        except UnsafeDestination as exc:
+            raise ValidationFailed(str(exc)) from exc
+        session.metadata_ = {**(session.metadata_ or {}), "open_url_encrypted": encrypt_secret(url)}
     if session.status == BrowserSessionStatus.closed.value:
         session.status = BrowserSessionStatus.launching.value
         session.error = ""
@@ -211,6 +242,10 @@ async def set_interactive(db: AsyncSession, session: BrowserSession, interactive
 
 
 async def navigate(db: AsyncSession, session: BrowserSession, url: str) -> None:
+    try:
+        require_safe_http_url(url)
+    except UnsafeDestination as exc:
+        raise ValidationFailed(str(exc)) from exc
     session.last_used_at = _now()
     await db.commit()
     await get_bus().publish(input_channel(session.id), {"type": "navigate", "url": url, "source": "api"})

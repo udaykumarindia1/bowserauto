@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -52,10 +53,39 @@ class AuthContext:
 
 
 def client_ip(request: Request | WebSocket) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
-    return (request.client.host if request.client else "")[:64]
+    """Return the peer address, trusting X-Forwarded-For only through configured proxy CIDRs.
+
+    Walking the chain from the directly connected peer outwards prevents an untrusted client from
+    choosing the leftmost XFF value when a trusted reverse proxy appends its own observation.
+    """
+    peer_text = request.client.host if request.client else ""
+    try:
+        peer = ipaddress.ip_address(peer_text)
+    except ValueError:
+        return peer_text[:64]
+
+    trusted = []
+    for value in get_settings().trusted_proxy_ips:
+        try:
+            trusted.append(ipaddress.ip_network(value, strict=False))
+        except ValueError:
+            continue
+
+    def is_trusted(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+        return any(address in network for network in trusted)
+
+    if not is_trusted(peer):
+        return str(peer)[:64]
+    chain = request.headers.get("x-forwarded-for", "")
+    current = peer
+    for item in reversed(chain.split(",")):
+        if not is_trusted(current):
+            break
+        try:
+            current = ipaddress.ip_address(item.strip())
+        except ValueError:
+            break
+    return str(current)[:64]
 
 
 async def _load_auth(db: AsyncSession, token: str | None, *, touch: bool = True) -> AuthContext | None:

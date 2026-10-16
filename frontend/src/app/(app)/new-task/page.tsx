@@ -40,6 +40,8 @@ function NewTaskForm() {
   const [platformKey, setPlatformKey] = React.useState(params.get("platform") || "");
   const [sessionId, setSessionId] = React.useState(params.get("session") || "");
   const [priority, setPriority] = React.useState(5);
+  const [approvalMode, setApprovalMode] = React.useState<"confirm_writes" | "confirm_all" | "never">("confirm_writes");
+  const [allowedDomains, setAllowedDomains] = React.useState("");
   const [config, setConfig] = React.useState({ max_retries: 3, generation_timeout_seconds: 900, action_timeout_seconds: 30, agent_mode: "auto" as "auto" | "adapter" | "generic", headless: "" as "" | "true" | "false", retry_failed_only: false });
   const [mock, setMock] = React.useState({ speed: "fast", fail_rate: 0, login_required: false, human_check_attempt: 0 });
   const [startNow, setStartNow] = React.useState(true);
@@ -105,6 +107,8 @@ function NewTaskForm() {
           generation_timeout_seconds: config.generation_timeout_seconds,
           action_timeout_seconds: config.action_timeout_seconds,
           agent_mode: config.agent_mode,
+          approval_mode: approvalMode,
+          allowed_domains: allowedDomains.split(/\r?\n/).map((domain) => domain.trim()).filter(Boolean),
           headless: config.headless === "" ? null : config.headless === "true",
           retry_failed_only: config.retry_failed_only,
           mock_options: effectivePlatform === "mock" ? { speed: mock.speed, fail_rate: mock.fail_rate, login_required: mock.login_required, human_check_attempt: mock.human_check_attempt || undefined } : {},
@@ -292,6 +296,20 @@ function NewTaskForm() {
                   <option value="true">headless</option>
                   <option value="false">headed (visible on the worker)</option>
                 </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Browser action approval</Label>
+                <Select value={approvalMode} onChange={(e) => setApprovalMode(e.target.value as typeof approvalMode)}>
+                  <option value="confirm_writes">Confirm browser and file changes</option>
+                  <option value="confirm_all">Confirm every browser and file tool</option>
+                  <option value="never">Do not pause for approval</option>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">Applies to generic-agent and platform-adapter browser actions. Confirmed text, selected values and file paths are hidden in the review panel; confirm_all also gates navigation and page-state changes.</p>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Allowed browser domains (optional)</Label>
+                <Textarea rows={3} value={allowedDomains} onChange={(e) => setAllowedDomains(e.target.value)} placeholder="example.com\nwww.example.org" />
+                <p className="text-[10px] text-muted-foreground">One hostname per line. Each entry also allows its subdomains. Leave blank to allow any destination permitted by the global URL-safety policy.</p>
               </div>
               {isVideo ? (
                 <label className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-[0.12em] sm:col-span-3">

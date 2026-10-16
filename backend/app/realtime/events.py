@@ -27,6 +27,12 @@ EVENT_TYPES = {
     "task.resumed",
     "task.progress",
     "task.attention",
+    "task.approval",
+    "schedule.created",
+    "schedule.updated",
+    "schedule.deleted",
+    "schedule.dispatched",
+    "storage.quota_warning",
     "task.completed",
     "task.failed",
     "task.cancelled",
@@ -110,6 +116,7 @@ async def emit(
     """Persist an activity log entry and broadcast it."""
     if event_type not in EVENT_TYPES:
         logger.debug("Unregistered event type %s", event_type)
+    safe_message = redact(message)
     log = ActivityLog(
         organization_id=_as_uuid(org_id),
         task_id=_as_uuid(task_id),
@@ -118,7 +125,7 @@ async def emit(
         scene_id=_as_uuid(scene_id),
         level=level,
         event_type=event_type,
-        message=message,
+        message=safe_message,
         data=_serialize(redact(payload or {})),
         duration_ms=duration_ms,
     )
@@ -130,7 +137,7 @@ async def emit(
     event = build_event(
         event_type,
         org_id,
-        {"message": message, "level": level, "log_id": str(log.id), **(payload or {})},
+        {"message": safe_message, "level": level, "log_id": str(log.id), **(payload or {})},
         task_id=task_id,
         project_id=project_id,
         session_id=session_id,

@@ -350,15 +350,23 @@ async def test_settings_limits_and_members(client: ApiClient, other_client: ApiC
     provider_ids = {provider["id"] for provider in settings["llm"]["providers"]}
     assert {"openai_compatible", "gemini", "ollama", "anthropic"}.issubset(provider_ids)
     tightened = await client.patch(
-        "/api/settings", json={"limits": {"max_retries": 1, "max_browser_sessions": 2}, "name": "Studio"}
+        "/api/settings",
+        json={
+            "limits": {"max_retries": 1, "max_browser_sessions": 2, "max_storage_mb": 2048},
+            "name": "Studio",
+        },
     )
     assert tightened.status_code == 200, tightened.text
     assert (
         tightened.json()["effective_limits"]["max_retries"] == 1
+        and tightened.json()["effective_limits"]["max_storage_mb"] == 2048
         and tightened.json()["organization"]["name"] == "Studio"
     )
     # Limits can only be tightened within the system range.
     assert (await client.patch("/api/settings", json={"limits": {"max_retries": 999}})).status_code == 422
+    assert (
+        await client.patch("/api/settings", json={"limits": {"max_storage_mb": 1_000_001}})
+    ).status_code == 422
     # LLM key is stored encrypted and never echoed back.
     saved = await client.patch(
         "/api/settings", json={"llm_provider": "openai", "llm_api_key": "sk-test-1234567890abcdef"}

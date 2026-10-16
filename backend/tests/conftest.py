@@ -184,7 +184,10 @@ class ApiClient:
         config: dict[str, Any] | None = None,
         **extra: Any,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"project_id": project_id, "config": config or {}, **extra}
+        # Most workflow tests exercise the adapter result, not the interactive approval UI.
+        # Approval-specific tests opt back into confirm_writes explicitly.
+        test_config = {"approval_mode": "never", **(config or {})}
+        payload: dict[str, Any] = {"project_id": project_id, "config": test_config, **extra}
         if session_id:
             payload["browser_session_id"] = session_id
         response = await self.post("/api/tasks", json=payload)

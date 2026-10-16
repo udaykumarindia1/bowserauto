@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Hand, Pause, Play, RotateCcw, SkipForward, Square, Undo2 } from "lucide-react";
+import { Check, Hand, Pause, Play, RotateCcw, SkipForward, Square, Undo2, X } from "lucide-react";
 
 import { ConfirmBanner } from "@/components/hud/confirm-banner";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,10 @@ import { canWrite, toast, useAppStore } from "@/lib/store";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type Action = "start" | "pause" | "resume" | "stop" | "takeover" | "release" | "retry" | "skip";
+type Action = "start" | "pause" | "resume" | "stop" | "takeover" | "release" | "retry" | "skip" | "approve" | "reject";
 
 /** Which controls make sense for a task in a given state. */
-export function availableActions(task: Pick<Task, "status" | "human_control">): Action[] {
+export function availableActions(task: Pick<Task, "status" | "human_control" | "attention">): Action[] {
   const s = task.status;
   const actions: Action[] = [];
   if (s === "draft") actions.push("start");
@@ -23,7 +23,9 @@ export function availableActions(task: Pick<Task, "status" | "human_control">): 
   if (s === "paused" && !task.human_control) actions.push("resume", "takeover", "stop");
   if (s === "paused" && task.human_control) actions.push("release", "stop");
   if (s === "queued") actions.push("stop");
-  if (s === "waiting_for_human" || s === "needs_attention") {
+  if (s === "waiting_for_human" && task.attention?.kind === "approval") {
+    actions.push("approve", "reject", "stop");
+  } else if (s === "waiting_for_human" || s === "needs_attention") {
     actions.push(task.human_control ? "release" : "takeover", "retry", "skip", "stop");
   }
   if (s === "failed" || s === "cancelled") actions.push("retry");
@@ -39,6 +41,8 @@ const LABELS: Record<Action, { label: string; icon: React.ComponentType<{ classN
   release: { label: "Return control to AI", icon: Undo2, variant: "success" },
   retry: { label: "Retry", icon: RotateCcw, variant: "default" },
   skip: { label: "Skip", icon: SkipForward, variant: "outline" },
+  approve: { label: "Approve action", icon: Check, variant: "success" },
+  reject: { label: "Reject action", icon: X, variant: "destructive" },
 };
 
 export function useTaskAction(taskId: string) {

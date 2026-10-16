@@ -171,7 +171,9 @@ async def test_session_lifecycle_and_limits(client: ApiClient, fake_sites) -> No
         )
     ).status_code == 200
     await asyncio.sleep(0.3)
-    assert (await client.get(f"/api/sessions/{session['id']}")).json()["current_url"].endswith("login=1")
+    exposed_url = (await client.get(f"/api/sessions/{session['id']}")).json()["current_url"]
+    assert exposed_url.startswith("http://mock.test/mock-platform/")
+    assert "login=1" not in exposed_url  # URL query strings are omitted from persisted/API state
     # Session level takeover / release without a task.
     assert (await client.post(f"/api/sessions/{session['id']}/takeover")).status_code == 200
     await asyncio.sleep(0.2)

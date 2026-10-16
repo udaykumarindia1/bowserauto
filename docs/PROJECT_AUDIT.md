@@ -2,19 +2,39 @@
 
 **Audit date:** 2026-10-16
 
-**Reviewed source revision:** `ad36c83` (branch `arena/c436eb2e-bowserauto`)
+**Baseline reviewed source revision:** `ad36c83` (branch `arena/c436eb2e-bowserauto`)
 
-**Release assessment:** **Not certified for production or public, untrusted workloads.** Address the P1 findings below and verify them in a deployment-like environment before internet exposure.
+**Current release assessment:** **Not certified for production or public, untrusted workloads.** Application remediations and Phase 0–3 status are recorded in [`ROADMAP_STATUS.md`](ROADMAP_STATUS.md). Remaining items include plaintext live Chromium profiles, external egress enforcement/DNS pinning, PostgreSQL multi-worker verification, and deployment/restore drills.
 
-This is an evidence-based repository review, not an independent penetration test or a compliance certification. Findings distinguish confirmed code/configuration gaps from risks that were not reproduced. No confirmed breach or successful exploit was found. Runtime application code was not changed as part of this audit; documentation and configuration comments were corrected where they overstated profile encryption, TLS, coverage, or readiness.
+This is an evidence-based repository review, not an independent penetration test or a compliance certification. Findings distinguish confirmed code/configuration gaps from risks that were not reproduced. No confirmed breach or successful exploit was found. The finding descriptions below record conditions at the baseline revision; the remediation table below supersedes their original status where branch changes have landed.
 
 ## Executive summary
 
-The project has a meaningful foundation: worker-based browser execution, tenant-scoped APIs, role checks, cookie/CSRF authentication, encrypted organization LLM keys and serialized browser-state snapshots, structured task recovery, and a substantial backend test suite. The checked-in tests use a fake browser and do not make real AI-generation calls.
+The original audit identified P1/P2 security and reliability gaps. Subsequent work on the current branch adds request-time browser URL checks, DNS-aware LLM endpoint validation, URL/token redaction, fail-closed production settings, generic and adapter-browser action approval, scheduled workflows, disk-backed exports/downloads, tenant storage quotas, encrypted backup tooling, phone pairing, a live skills catalog, and CI gates. The full current implementation status and caveats are listed below and in [`ROADMAP_STATUS.md`](ROADMAP_STATUS.md).
 
-The principal release blockers are the lack of a common browser outbound-network policy, a hostname-resolution gap in custom LLM endpoint validation, potential secret-bearing browser URLs flowing into persisted/API/LLM paths, unsafe-by-default Compose ingress/cookie settings, the production Compose stack mounting the unauthenticated mock platform, and live browser profiles being stored without application-level encryption on a volume shared with the API container. These are code/configuration observations; actual exploitability depends on deployment exposure and network topology.
+The primary residual production risks are plaintext live Chromium profile directories, DNS rebinding/egress controls outside the application, and deployment verification not performed in this sandbox. No live exploit or real third-party generation was attempted.
 
-The audit also found a high-severity frontend dependency audit result, access-log exposure of signed download tokens, a client-IP trust issue affecting rate limits, resource-exhaustion paths, a possible cross-worker concurrency race, and gaps in CI/frontend test coverage. The Python dependency audit found no known vulnerabilities for the dependency versions resolved at audit time, but `requirements.txt` is not a frozen lockfile.
+## Current remediation status (2026-10-16)
+
+The detailed finding narratives that follow describe the baseline commit above. These current statuses
+supersede their baseline status labels:
+
+| Finding | Current status |
+| --- | --- |
+| A-01 browser URL/egress policy | **Mitigated in application:** DNS-aware request interception, metadata/private checks, and task allowlists. Egress firewall and DNS pinning remain deployment controls. |
+| A-02 LLM endpoint DNS checks | **Mitigated in validation:** bounded A/AAAA resolution rejects private/metadata addresses unless the exact host is allowed. DNS rebinding at connect time still requires egress control. |
+| A-03 browser URL/token leakage | **Mitigated in code/tests:** sanitized before persistence, events, API display, prompts, and logs; secret-bearing start URL state is encrypted. |
+| A-04 production ingress/settings | **Partially mitigated:** secure cookies, HTTPS/origin/host/mock/registration checks; frontend binds to loopback by default. TLS ingress must still be configured and tested. |
+| A-05 mock platform in production | **Mitigated:** production refuses `MOCK_PLATFORM_URL` and does not mount the mock router. |
+| A-06 plaintext live profiles | **Open:** active Chromium profiles remain plaintext on the data volume. GPG backups do not encrypt the live profile. |
+| A-07 forwarded client IP | **Mitigated:** forwarded addresses are trusted only through configured proxy CIDRs. |
+| A-08 signed-token access logs | **Mitigated:** signed route tokens are redacted from request-path logs; regression test added. |
+| A-09 resource exhaustion | **Partially mitigated:** disk-backed ZIP streaming, bounded media streaming, staged uploads, per-file limits, and org storage quota. Multipart ingress limits and restore/deployment load tests remain. |
+| A-10 cross-worker capacity | **Mitigated in PostgreSQL implementation:** organization row lock plus conditional claim. PostgreSQL multi-worker contention was not tested here. |
+| A-11 action policy | **Mitigated in application:** generic ToolRegistry and adapter-native BrowserDriver writes use the same approval controller; `confirm_all` also gates browser state changes. The explicit `never` mode and external-page semantics remain documented limitations. |
+| A-12 dependency advisories | **Mitigated at current resolution:** refreshed frontend dependencies and dependency-audit CI gate. Re-run audits against deployment locks before release. |
+| A-13 CI coverage | **Mitigated:** GitHub Actions runs backend lint/tests and frontend lint/typecheck/build/audit. A dedicated frontend unit suite remains absent. |
+| A-14 frontend headers | **Mitigated in Next/API configuration:** response security headers are configured. HTTPS/HSTS behavior still requires a live ingress check. |
 
 ## Severity and status
 

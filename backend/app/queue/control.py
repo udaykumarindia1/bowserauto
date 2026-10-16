@@ -33,12 +33,15 @@ class ControlToken:
         self.skip_requested = False
         self.retry_requested = False
         self.waiting = False  # True while a checkpoint is actually blocked in a pause
+        self._approval_event = asyncio.Event()
+        self._approval_result: bool | None = None
 
     # -------------------------------------------------------------- transitions
     def request_stop(self, reason: str = "stopped by user") -> None:
         self.stop_reason = reason
         self._stop.set()
         self._resume.set()
+        self._approval_event.set()
 
     def request_pause(self, reason: str = "paused by user", *, human: bool = False) -> None:
         if self._stop.is_set():
@@ -98,6 +101,26 @@ class ControlToken:
     def raise_if_stopped(self) -> None:
         if self._stop.is_set():
             raise TaskStopped(self.stop_reason or "stopped")
+
+    def begin_approval(self) -> None:
+        """Prepare a fresh one-shot approval wait before publishing the pending action."""
+        self._approval_result = None
+        self._approval_event.clear()
+
+    def resolve_approval(self, approved: bool) -> None:
+        """Resolve the pending browser-action approval from an authenticated API control."""
+        self._approval_result = approved
+        self._approval_event.set()
+
+    async def wait_for_approval(self) -> bool:
+        """Wait for explicit approve/reject; Stop sets the same wake event and takes priority."""
+        self.raise_if_stopped()
+        await self._approval_event.wait()
+        self.raise_if_stopped()
+        approved = self._approval_result
+        self._approval_result = None
+        self._approval_event.clear()
+        return bool(approved)
 
     async def checkpoint(self, *, raise_requests: bool = True) -> bool:
         """Yield to pause/stop.

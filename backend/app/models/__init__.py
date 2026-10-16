@@ -33,12 +33,14 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "AuthSession",
+    "DevicePairing",
     "Project",
     "Character",
     "Asset",
     "Scene",
     "Task",
     "TaskStep",
+    "TaskSchedule",
     "BrowserSession",
     "Platform",
     "AgentRun",
@@ -102,6 +104,8 @@ class TaskControl(str, enum.Enum):
     release = "release"
     skip_scene = "skip_scene"
     retry_scene = "retry_scene"
+    approve_action = "approve_action"
+    reject_action = "reject_action"
 
 
 class SceneStatus(str, enum.Enum):
@@ -206,6 +210,29 @@ class AuthSession(Base, UUIDMixin, TimestampMixin):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user_agent: Mapped[str] = mapped_column(String(400), default="", nullable=False)
     ip_address: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+
+
+class DevicePairing(Base, UUIDMixin, TimestampMixin):
+    """Short-lived, one-use QR pairing request for a same-origin mobile device."""
+
+    __tablename__ = "device_pairings"
+    __table_args__ = (Index("ix_device_pairings_user_status_expiry", "user_id", "status", "expires_at"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    device_name: Mapped[str] = mapped_column(String(100), default="", nullable=False)
+    user_agent: Mapped[str] = mapped_column(String(400), default="", nullable=False)
+    claim_ip: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # --------------------------------------------------------------------------- projects
@@ -380,6 +407,37 @@ class TaskStep(Base, UUIDMixin, TimestampMixin):
     error: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
     task: Mapped[Task] = relationship(back_populates="steps")
+
+
+class TaskSchedule(Base, UUIDMixin, TimestampMixin):
+    """Persistent, tenant-scoped schedule for an allowlisted generic browser workflow."""
+
+    __tablename__ = "task_schedules"
+    __table_args__ = (Index("ix_task_schedules_due", "enabled", "next_run_at"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), default="browser_workflow", nullable=False)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    platform_key: Mapped[str] = mapped_column(String(60), default="generic", nullable=False)
+    browser_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("browser_sessions.id", ondelete="SET NULL"), nullable=True
+    )
+    priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    config: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    repeat_interval_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 
 # -------------------------------------------------------------------- browser sessions

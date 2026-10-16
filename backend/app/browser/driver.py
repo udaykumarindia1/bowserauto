@@ -45,6 +45,8 @@ class InteractiveElement:
     selector: str = ""  # best-effort unique CSS selector
 
     def describe(self) -> str:
+        from app.core.url_safety import sanitize_text, sanitize_url
+
         bits = [f"[{self.index}]", f"<{self.tag}"]
         if self.role and self.role != self.tag:
             bits.append(f'role="{self.role}"')
@@ -57,13 +59,13 @@ class InteractiveElement:
         if self.value:
             bits.append(f'value="{self.value[:40]}"')
         if self.href:
-            bits.append(f'href="{self.href[:60]}"')
+            bits.append(f'href="{sanitize_url(self.href)[:60]}"')
         if self.disabled:
             bits.append("disabled")
         if self.checked is not None:
             bits.append(f"checked={str(self.checked).lower()}")
         text = self.text.strip()
-        return " ".join(bits) + ">" + (text[:80] if text and text != self.name else "")
+        return sanitize_text(" ".join(bits) + ">" + (text[:80] if text and text != self.name else ""))
 
 
 @dataclass
@@ -85,8 +87,10 @@ class PageSnapshot:
         return None
 
     def as_prompt(self, max_elements: int = 80, max_text: int = 2500) -> str:
+        from app.core.url_safety import sanitize_text, sanitize_url
+
         lines = [
-            f"URL: {self.url}",
+            f"URL: {sanitize_url(self.url)}",
             f"TITLE: {self.title}",
             f"SCROLL: {self.scroll[0]}px of {self.scroll[2]}px (viewport {self.scroll[1]}px)",
         ]
@@ -105,7 +109,7 @@ class PageSnapshot:
             lines.append(f"  … {len(self.elements) - max_elements} more elements")
         lines.append("VISIBLE TEXT:")
         lines.append(self.text[:max_text])
-        return "\n".join(lines)
+        return sanitize_text("\n".join(lines))
 
 
 @dataclass

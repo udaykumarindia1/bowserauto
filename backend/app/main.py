@@ -25,6 +25,7 @@ from app.core.database import dispose_engine, init_db, session_scope, wait_for_d
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
 from app.core.ratelimit import get_rate_limiter
+from app.core.url_safety import sanitize_text
 from app.realtime.bus import start_bus, stop_bus
 from app.storage.paths import ensure_data_dirs
 
@@ -58,6 +59,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         settings = get_settings()
         request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
+        safe_path = sanitize_text(request.url.path)
         started = time.perf_counter()
         if request.url.path.startswith("/api") and not request.url.path.startswith(
             ("/api/ws", "/api/events", "/api/health")
@@ -84,7 +86,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         except Exception:
             logger.exception(
                 "Unhandled error",
-                extra={"action": f"{request.method} {request.url.path}", "request_id": request_id},
+                extra={"action": f"{request.method} {safe_path}", "request_id": request_id},
             )
             return JSONResponse(
                 {
@@ -102,11 +104,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             logger.info(
                 "%s %s -> %s (%dms)",
                 request.method,
-                request.url.path,
+                safe_path,
                 response.status_code,
                 duration_ms,
                 extra={
-                    "action": f"{request.method} {request.url.path}",
+                    "action": f"{request.method} {safe_path}",
                     "result": response.status_code,
                     "duration_ms": duration_ms,
                     "request_id": request_id,
@@ -161,7 +163,7 @@ def create_app() -> FastAPI:
         description="AI Browser Automation Workspace – tasks, browser sessions, scenes, generated files and real-time events.",
         docs_url="/api/docs" if not settings.is_production else None,
         redoc_url=None,
-        openapi_url="/api/openapi.json" if not settings.is_production else "/api/openapi.json",
+        openapi_url=None if settings.is_production else "/api/openapi.json",
         lifespan=lifespan,
     )
     app.add_middleware(SecurityHeadersMiddleware)
@@ -201,7 +203,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(api_router)
-    if not settings.is_production or settings.mock_platform_url:
+    if not settings.is_production:
         from app.mock_platform.router import router as mock_router
 
         app.include_router(mock_router)

@@ -47,7 +47,6 @@ export default function FilesPage() {
             preview.mime_type.startsWith("video/") ? (
               <video src={preview.preview.url} controls autoPlay className="max-h-[70vh] w-full bg-black" />
             ) : preview.mime_type.startsWith("image/") ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={preview.preview.url} alt={preview.filename} className="max-h-[70vh] w-full bg-black object-contain" />
             ) : (
               <iframe src={preview.preview.url} title={preview.filename} className="h-[60vh] w-full border border-border bg-background" />

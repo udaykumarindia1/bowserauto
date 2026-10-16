@@ -10,7 +10,9 @@ import re
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
+import httpx
 from playwright.async_api import (
     BrowserContext,
     Download,
@@ -40,6 +42,7 @@ from app.browser.driver import (
 from app.browser.launcher import LaunchConfig, resolve_launch_config
 from app.core.config import get_settings
 from app.core.errors import BrowserCrashed, DownloadFailed, ElementNotFound
+from app.core.url_safety import BrowserURLPolicy, UnsafeDestination, sanitize_url
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,7 @@ class PlaywrightBrowser:
         self.pending_file_chooser: FileChooser | None = None
         self.closed = False
         self._lock = asyncio.Lock()
+        self.url_policy = BrowserURLPolicy(get_settings())
 
     # ----------------------------------------------------------------- lifecycle
     async def launch(self) -> None:
@@ -112,6 +116,7 @@ class PlaywrightBrowser:
             await self._shutdown_playwright()
             raise BrowserCrashed(f"Failed to launch Chromium: {str(exc)[:400]}") from exc
         self.context.set_default_timeout(settings.action_timeout_seconds * 1000)
+        await self.context.route("**/*", self._guard_request)
         self.context.on("page", self._on_new_page)
         self.context.on("close", lambda _: self._mark_closed())
         for page in self.context.pages:
@@ -119,6 +124,17 @@ class PlaywrightBrowser:
         if not self._pages:
             self._register_page(await self.context.new_page())
         self._active_page = self._pages[0]
+
+    async def _guard_request(self, route) -> None:  # noqa: ANN001
+        """Reject browser requests to unsafe destinations before Chromium connects."""
+        url = route.request.url
+        try:
+            await self.url_policy.check(url)
+        except UnsafeDestination as exc:
+            logger.warning("Blocked browser request to %s (%s)", sanitize_url(url), exc)
+            await route.abort("blockedbyclient")
+            return
+        await route.continue_()
 
     def _mark_closed(self) -> None:
         self.closed = True
@@ -136,7 +152,7 @@ class PlaywrightBrowser:
         page.on("close", lambda: self._on_page_closed(page))
         page.on("filechooser", self._on_file_chooser)
         page.on("download", self._on_download)
-        page.on("crash", lambda: logger.error("Page crashed: %s", page.url))
+        page.on("crash", lambda: logger.error("Page crashed: %s", sanitize_url(page.url)))
 
     def _on_page_closed(self, page: Page) -> None:
         with contextlib.suppress(ValueError):
@@ -253,7 +269,9 @@ class PlaywrightDriver:
             await page.goto(url, wait_until=wait_until, timeout=self._timeout(timeout_ms) * 2)  # type: ignore[arg-type]
         except PlaywrightTimeout:
             # Many SPA platforms never reach "load" because of long polling; continue with what we have.
-            logger.info("Navigation to %s timed out waiting for %s; continuing", url, wait_until)
+            logger.info(
+                "Navigation to %s timed out waiting for %s; continuing", sanitize_url(url), wait_until
+            )
         except PlaywrightError as exc:
             if "ERR_ABORTED" in str(exc):
                 return
@@ -685,18 +703,65 @@ class PlaywrightDriver:
         except PlaywrightError as exc:
             raise self._wrap(exc) from exc
 
-    async def fetch_to_file(self, url: str, path: Path) -> int:
-        """Fetch a URL with the page's cookies/session and store it on disk."""
-        try:
-            response = await self.page.request.get(url, timeout=180_000)
-            if not response.ok:
-                raise DownloadFailed(f"Fetching {url[:80]} failed with HTTP {response.status}")
-            body = await response.body()
-        except PlaywrightError as exc:
-            raise DownloadFailed(f"Fetching media failed: {str(exc)[:200]}") from exc
+    async def fetch_to_file(self, url: str, path: Path, *, max_bytes: int | None = None) -> int:
+        """Stream media to disk with browser cookies and the worker's URL safety policy."""
+        limit = max_bytes or get_settings().max_generated_file_size_mb * 1024 * 1024
+        current_url = url
+        referer = self.page.url
+        total = 0
+        redirects = 0
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(body)
-        return len(body)
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=False
+            ) as client:
+                while True:
+                    await self.browser.url_policy.check(current_url)
+                    cookies = await self.page.context.cookies([current_url])
+                    headers = {"accept": "*/*"}
+                    if cookies:
+                        headers["cookie"] = "; ".join(
+                            f"{cookie['name']}={cookie['value']}" for cookie in cookies
+                        )
+                    with contextlib.suppress(Exception):
+                        headers["user-agent"] = await self.page.evaluate("navigator.userAgent")
+                    if referer:
+                        headers["referer"] = referer
+                    async with client.stream("GET", current_url, headers=headers) as response:
+                        if response.status_code in (301, 302, 303, 307, 308):
+                            location = response.headers.get("location")
+                            if not location or redirects >= 10:
+                                raise DownloadFailed("Media download returned an invalid redirect")
+                            current_url = urljoin(current_url, location)
+                            referer = self.page.url
+                            redirects += 1
+                            continue
+                        if not response.is_success:
+                            raise DownloadFailed(f"Media request failed with HTTP {response.status_code}")
+                        content_length = response.headers.get("content-length")
+                        if content_length and int(content_length) > limit:
+                            raise DownloadFailed(
+                                "Media file exceeds the configured size limit", retryable=False
+                            )
+                        with open(path, "wb") as output:
+                            async for chunk in response.aiter_bytes(1024 * 1024):
+                                total += len(chunk)
+                                if total > limit:
+                                    raise DownloadFailed(
+                                        "Media file exceeds the configured size limit", retryable=False
+                                    )
+                                output.write(chunk)
+                        break
+        except DownloadFailed:
+            path.unlink(missing_ok=True)
+            raise
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            path.unlink(missing_ok=True)
+            raise DownloadFailed(f"Media fetch failed: {type(exc).__name__}") from exc
+        except PlaywrightError as exc:
+            path.unlink(missing_ok=True)
+            raise DownloadFailed(f"Media fetch failed: {type(exc).__name__}") from exc
+        return total
 
     async def list_tabs(self) -> list[dict[str, Any]]:
         tabs = []
@@ -707,7 +772,7 @@ class PlaywrightDriver:
             title = ""
             with contextlib.suppress(Exception):
                 title = await p.title()
-            tabs.append({"index": i, "url": p.url, "title": title, "active": p is active})
+            tabs.append({"index": i, "url": sanitize_url(p.url), "title": title, "active": p is active})
         return tabs
 
     async def switch_tab(self, index: int) -> None:

@@ -336,6 +336,12 @@ def test_production_llm_base_url_requires_private_http_host_allowlist() -> None:
         secret_key="a-production-secret-with-at-least-thirty-two-characters",
         encryption_key="ZmFrZS1rZXktbXVzdC1iZS1leGFjdGx5LWVudHJ5",
         database_url="postgresql+asyncpg://user:pass@db:5432/bowserauto",
+        public_base_url="https://app.example.test",
+        allowed_origins=["https://app.example.test"],
+        trusted_hosts=["app.example.test"],
+        cookie_secure=True,
+        allow_registration=False,
+        mock_platform_url=None,
         llm_allowed_hosts=[],
     )
     with pytest.raises(ValueError, match="allowlisted"):
@@ -363,6 +369,31 @@ def test_production_llm_base_url_requires_private_http_host_allowlist() -> None:
         validate_llm_base_url("http://ollama:11434", settings=trusted, provider="ollama")
         == "http://ollama:11434"
     )
+
+
+def test_production_llm_url_checks_resolved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(
+        app_env="production",
+        secret_key="a-production-secret-with-at-least-thirty-two-characters",
+        encryption_key="ZmFrZS1rZXktbXVzdC1iZS1leGFjdGx5LWVudHJ5",
+        database_url="postgresql+asyncpg://user:pass@db:5432/bowserauto",
+        public_base_url="https://app.example.test",
+        allowed_origins=["https://app.example.test"],
+        trusted_hosts=["app.example.test"],
+        cookie_secure=True,
+        allow_registration=False,
+        mock_platform_url=None,
+    )
+    monkeypatch.setattr("app.agent.llm.factory._resolved_addresses", lambda _host, _port: {"10.0.0.9"})
+    with pytest.raises(ValueError, match="allowlisted"):
+        validate_llm_base_url("https://public-looking.example.test", settings=settings)
+
+    trusted = settings.model_copy(update={"llm_allowed_hosts": ["ollama.internal"]})
+    assert validate_llm_base_url("https://ollama.internal", settings=trusted) == "https://ollama.internal"
+
+    monkeypatch.setattr("app.agent.llm.factory._resolved_addresses", lambda _host, _port: {"169.254.169.254"})
+    with pytest.raises(ValueError, match="metadata"):
+        validate_llm_base_url("https://ollama.internal", settings=trusted)
 
 
 def test_extract_json_finds_document_inside_prose_and_fences() -> None:
