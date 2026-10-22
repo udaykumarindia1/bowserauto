@@ -242,8 +242,18 @@ export const api = {
       repeat_interval_minutes: number | null;
       config: { agent_mode: "generic"; approval_mode: "confirm_writes" | "confirm_all"; allowed_domains: string[] };
     }) => post<TaskSchedule>("/api/schedules", body),
-    update: (id: string, body: { enabled?: boolean; run_at?: string; repeat_interval_minutes?: number | null }) =>
-      patch<TaskSchedule>(`/api/schedules/${id}`, body),
+    update: (id: string, body: {
+      enabled?: boolean;
+      title?: string;
+      kind?: string;
+      instructions?: string;
+      platform_key?: string;
+      browser_session_id?: string | null;
+      priority?: number;
+      run_at?: string;
+      repeat_interval_minutes?: number | null;
+      config?: { agent_mode: "generic"; approval_mode: "confirm_writes" | "confirm_all"; allowed_domains: string[] };
+    }) => patch<TaskSchedule>(`/api/schedules/${id}`, body),
     remove: (id: string) => del(`/api/schedules/${id}`),
   },
 

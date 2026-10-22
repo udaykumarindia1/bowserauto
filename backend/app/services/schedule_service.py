@@ -115,17 +115,78 @@ async def update_schedule(
     db: AsyncSession, schedule: TaskSchedule, payload: TaskScheduleUpdate
 ) -> TaskSchedule:
     data = payload.model_dump(exclude_unset=True)
-    if "run_at" in data and data["run_at"] is not None:
-        data["run_at"] = data["run_at"].astimezone(UTC)
+    if not data:
+        raise ValidationFailed("Provide at least one schedule field to update")
+
+    org = (
+        await db.execute(
+            select(Organization).where(Organization.id == schedule.organization_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if org is None:
+        raise NotFoundError("Organization not found")
+    current = (
+        await db.execute(
+            select(TaskSchedule)
+            .where(TaskSchedule.id == schedule.id, TaskSchedule.organization_id == schedule.organization_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if current is None:
+        raise NotFoundError("Schedule not found")
+    schedule = current
+
+    non_nullable = {
+        "enabled",
+        "title",
+        "kind",
+        "instructions",
+        "platform_key",
+        "priority",
+        "run_at",
+        "config",
+    }
+    if any(key in data and data[key] is None for key in non_nullable):
+        raise ValidationFailed("Schedule fields cannot be cleared")
+
+    if schedule.last_task_id and schedule.repeat_interval_minutes is None and not schedule.enabled:
+        if any(key != "enabled" for key in data):
+            raise ConflictError("A dispatched one-time schedule cannot be edited; create a new schedule")
+
+    if "title" in data:
+        data["title"] = data["title"].strip()
+        if not data["title"]:
+            raise ValidationFailed("Workflow name must not be blank")
+    if "instructions" in data:
+        data["instructions"] = data["instructions"].strip()
+        if not data["instructions"]:
+            raise ValidationFailed("Workflow instructions must not be blank")
+    if "platform_key" in data and get_adapter_class(data["platform_key"]) is None:
+        raise ValidationFailed(f"Unknown platform '{data['platform_key']}'")
+    if data.get("browser_session_id"):
+        session = await db.get(BrowserSession, data["browser_session_id"])
+        if session is None or session.organization_id != schedule.organization_id:
+            raise NotFoundError("Browser session not found")
+        if session.status == "expired":
+            raise ConflictError("The selected browser session has expired; reconnect it first")
+    if "config" in data:
+        config = TaskConfig.model_validate(data["config"])
+        if not config.allowed_domains:
+            raise ValidationFailed("Scheduled workflows require at least one allowed domain")
+        if config.approval_mode == "never":
+            raise ValidationFailed("Scheduled workflows cannot disable action approval")
+        data["config"] = config.model_dump()
+        data["config"]["agent_mode"] = "generic"
+    if "run_at" in data:
+        run_at = data.pop("run_at")
+        next_run_at = _utc(run_at)
+        if next_run_at <= utcnow():
+            raise ValidationFailed("Choose a future run time")
+        data["next_run_at"] = next_run_at
+
     if data.get("enabled") is True:
         settings = get_settings()
-        org = (
-            await db.execute(
-                select(Organization).where(Organization.id == schedule.organization_id).with_for_update()
-            )
-        ).scalar_one_or_none()
-        if org is None:
-            raise NotFoundError("Organization not found")
         active_count = (
             await db.execute(
                 select(func.count(TaskSchedule.id)).where(
@@ -141,9 +202,10 @@ async def update_schedule(
             )
         if not schedule.repeat_interval_minutes and schedule.last_task_id:
             raise ConflictError("A completed one-time schedule cannot be re-enabled; create a new schedule")
-        if _utc(schedule.next_run_at) <= utcnow():
-            schedule.next_run_at = utcnow() + timedelta(seconds=1)
-        schedule.last_error = ""
+        if "next_run_at" not in data and _utc(schedule.next_run_at) <= utcnow():
+            data["next_run_at"] = utcnow() + timedelta(seconds=1)
+        data["last_error"] = ""
+
     for key, value in data.items():
         setattr(schedule, key, value)
     await emit(

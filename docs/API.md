@@ -67,14 +67,14 @@ the list empty keeps the global URL-safety rules.
 | --- | --- | --- |
 | GET | `/schedules` | List the caller's organization's schedules. |
 | POST | `/schedules` | Create `{title, kind, instructions, platform_key, browser_session_id?, priority, run_at, repeat_interval_minutes?, config{agent_mode, approval_mode, allowed_domains[]}}`. `run_at` must include a timezone and be in the future. At least one exact allowed hostname is required; `approval_mode=never` is rejected. |
-| PATCH | `/schedules/{id}` | Pause/resume, change `run_at`, or change `repeat_interval_minutes`. |
+| PATCH | `/schedules/{id}` | Pause/resume or edit `title`, `kind`, `instructions`, `platform_key`, `browser_session_id`, `priority`, `run_at`, `repeat_interval_minutes`, or `config`. Set `browser_session_id` or `repeat_interval_minutes` to `null` to clear them. A dispatched one-time schedule cannot be edited or re-enabled. |
 | DELETE | `/schedules/{id}` | Remove the schedule; previously dispatched tasks remain. |
 
 Workers dispatch due schedules idempotently into the normal persistent task queue. Recurring runs
 skip overlapping intervals rather than backfilling missed runs. Queue-capacity pressure defers a due
-schedule. The API/UI supports one-time, hourly, six-hourly, daily, and weekly cadences; the API
-accepts 15–10,080-minute intervals. Schedules always use the generic agent and its domain/action
-policy. A schedule cannot disable approval.
+schedule. The UI supports one-time, hourly, six-hourly, daily, weekly, and custom cadences; custom
+intervals must be whole minutes from 15 to 10,080. Schedules always use the generic agent and its
+domain/action policy. A schedule cannot disable approval.
 
 ## Projects, scenes, assets, characters
 

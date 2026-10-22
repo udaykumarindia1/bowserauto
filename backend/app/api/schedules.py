@@ -61,7 +61,7 @@ async def update_schedule(
         org_id=auth.org_id,
         resource_type="task_schedule",
         resource_id=schedule.id,
-        data={"enabled": schedule.enabled},
+        data={"enabled": schedule.enabled, "changed_fields": sorted(payload.model_fields_set)},
     )
     await db.commit()
     return TaskScheduleOut.model_validate(schedule)

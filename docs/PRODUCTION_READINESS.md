@@ -56,7 +56,7 @@ and smoke-test entries do not imply exhaustive route coverage or a production-sa
 | Observability | structured logs with task/session ids and durations; `X-Request-ID`; activity + audit tables |
 | Cost/limits | server ceilings + per-org limits (duration, retries, scenes, concurrency, sessions, file size, rate limit) enforced (`test_task_limits_enforced`, `test_settings_limits_and_members`) |
 | LLM provider safety | OpenAI-compatible, Gemini, Ollama and Anthropic adapters tested with mocked transports; org-selected endpoints cannot inherit the server API key; provider URL restrictions and the admin-only connection test are covered by tests |
-| Lint/type/test gates | Current verification: Ruff check/format, pytest (137 passed), `tsc --noEmit`, `eslint src`, `next build`, `npm audit --audit-level=high` (zero vulnerabilities) |
+| Lint/type/test gates | Current verification: Ruff check/format, pytest (139 passed), `tsc --noEmit`, `eslint src`, `next build`, `npm audit --audit-level=high` (zero vulnerabilities) |
 | Docker Compose | frontend, backend, worker, browser-worker, postgres, redis (+ optional nginx), health checks on all services. Written and syntax-validated; **not executed in the authoring sandbox (no Docker daemon)** — run `docker compose up` once on the target host before go-live |
 
 ## Bugs found and fixed during the audit

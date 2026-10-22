@@ -58,7 +58,7 @@ async def test_scheduled_workflow_requires_domains_and_keeps_approval(client: Ap
 async def test_schedule_crud_is_tenant_scoped_and_respects_roles(
     client: ApiClient, other_client: ApiClient
 ) -> None:
-    created = await client.post("/api/schedules", json=_payload(repeat_interval_minutes=None))
+    created = await client.post("/api/schedules", json=_payload())
     assert created.status_code == 201, created.text
     schedule_id = created.json()["id"]
 
@@ -67,12 +67,97 @@ async def test_schedule_crud_is_tenant_scoped_and_respects_roles(
     assert schedule_id in {row["id"] for row in listing.json()}
     assert (await other_client.get("/api/schedules")).json() == []
 
+    next_run_at = datetime.now(UTC) + timedelta(hours=2)
+    edited = await client.patch(
+        f"/api/schedules/{schedule_id}",
+        json={
+            "title": "Updated public status check",
+            "kind": "website_testing",
+            "instructions": "Check the public status and summarize incidents.",
+            "platform_key": "generic",
+            "priority": 8,
+            "run_at": next_run_at.isoformat(),
+            "repeat_interval_minutes": 90,
+            "config": {
+                "agent_mode": "auto",
+                "approval_mode": "confirm_all",
+                "allowed_domains": ["status.example.com", "docs.example.com"],
+            },
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    edited_data = edited.json()
+    assert edited_data["title"] == "Updated public status check"
+    assert edited_data["kind"] == "website_testing"
+    assert edited_data["priority"] == 8
+    assert edited_data["repeat_interval_minutes"] == 90
+    persisted_run_at = datetime.fromisoformat(edited_data["next_run_at"])
+    if persisted_run_at.tzinfo is None:
+        persisted_run_at = persisted_run_at.replace(tzinfo=UTC)
+    assert persisted_run_at == next_run_at
+    assert edited_data["config"]["agent_mode"] == "generic"
+    assert edited_data["config"]["approval_mode"] == "confirm_all"
+    assert edited_data["config"]["allowed_domains"] == ["status.example.com", "docs.example.com"]
+
     paused = await client.patch(f"/api/schedules/{schedule_id}", json={"enabled": False})
     assert paused.status_code == 200 and paused.json()["enabled"] is False
     resumed = await client.patch(f"/api/schedules/{schedule_id}", json={"enabled": True})
     assert resumed.status_code == 200 and resumed.json()["enabled"] is True
     assert (await other_client.delete(f"/api/schedules/{schedule_id}")).status_code == 404
     assert (await client.delete(f"/api/schedules/{schedule_id}")).status_code == 204
+
+
+async def test_schedule_update_keeps_domain_and_approval_policy_mandatory(client: ApiClient) -> None:
+    created = await client.post("/api/schedules", json=_payload())
+    assert created.status_code == 201, created.text
+    schedule_id = created.json()["id"]
+
+    for config in (
+        {"allowed_domains": [], "approval_mode": "confirm_writes"},
+        {"allowed_domains": ["status.example.com"], "approval_mode": "never"},
+    ):
+        response = await client.patch(f"/api/schedules/{schedule_id}", json={"config": config})
+        assert response.status_code == 422
+
+    past = await client.patch(
+        f"/api/schedules/{schedule_id}",
+        json={"run_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat()},
+    )
+    assert past.status_code == 422
+    await client.delete(f"/api/schedules/{schedule_id}")
+
+
+async def test_dispatched_one_time_schedule_cannot_be_edited_or_reenabled(
+    client: ApiClient, worker: Worker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def no_background_dispatch() -> int:
+        return 0
+
+    monkeypatch.setattr("app.workers.main.dispatch_due_schedules", no_background_dispatch)
+    prior_capabilities = worker.capabilities
+    worker.capabilities = []
+    created = await client.post("/api/schedules", json=_payload(repeat_interval_minutes=None))
+    assert created.status_code == 201, created.text
+    schedule_id = uuid.UUID(created.json()["id"])
+    async with session_scope() as db:
+        schedule = await db.get(TaskSchedule, schedule_id)
+        assert schedule is not None
+        schedule.next_run_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    try:
+        assert await dispatch_due_schedules() == 1
+        changed = await client.patch(f"/api/schedules/{schedule_id}", json={"title": "No longer pending"})
+        assert changed.status_code == 409
+        resumed = await client.patch(f"/api/schedules/{schedule_id}", json={"enabled": True})
+        assert resumed.status_code == 409
+        async with session_scope() as db:
+            schedule = await db.get(TaskSchedule, schedule_id)
+            assert schedule is not None and schedule.enabled is False
+            task_id = str(schedule.last_task_id)
+        await client.post(f"/api/tasks/{task_id}/stop")
+        await client.delete(f"/api/schedules/{schedule_id}")
+    finally:
+        worker.capabilities = prior_capabilities
 
 
 async def test_due_schedule_dispatches_once_with_allowlist_and_interval(

@@ -33,7 +33,7 @@ customisable colours and assistant name) that ports the *functionality* of
 | Human takeover | **TAKE OVER BROWSER** pauses the agent and gives you click/type/scroll/paste/upload control in the live viewer; **RETURN CONTROL TO AI** re-inspects page state and resumes. CAPTCHA/MFA/logins are never bypassed |
 | Mobile pairing | Settings → Devices generates a two-minute QR pairing request; the signed-in device approves before the phone receives its own revocable HttpOnly app session |
 | Agent policy & approvals | Task-level browser-domain allowlists; generic-agent and adapter-native browser writes pause for authenticated approve/reject decisions by default; `confirm_all` also gates browser state changes; sensitive input values are hidden in approval previews |
-| Scheduled workflows | Persistent one-time/recurring generic browser tasks with exact host allowlists, approval modes, pause/resume/delete, idempotent worker dispatch, and no overlapping runs |
+| Scheduled workflows | Persistent one-time/recurring generic browser tasks with exact host allowlists, approval modes, create/edit/pause/resume/delete, custom 15-minute-to-7-day intervals, idempotent dispatch, and no overlapping runs |
 | Task queue | DB-persisted queue with priority (1–10), reorder, pause/resume/stop/retry/skip, STOP EVERYTHING, atomic claims, heartbeats and crash recovery (queue survives restarts) |
 | Script → scenes | LLM or heuristic script analysis into editable scenes (reorder, duplicate, delete, edit prompt/visual/camera/dialogue, per-scene platform, reference images, regenerate prompt) |
 | Scene generation | open platform → verify login → upload references → prompt → configure → generate → **smart state detection** (`QUEUED/GENERATING/PROCESSING/COMPLETED/DOWNLOAD_READY/DOWNLOADING/SUCCESS/FAILED/RETRYING/BLOCKED/WAITING_FOR_HUMAN`) with configurable timeouts, no blind sleeps → download → verify → rename `scene_001.mp4` → metadata |
@@ -47,7 +47,7 @@ customisable colours and assistant name) that ports the *functionality* of
 | Cost & limits | Org-level limits (task duration, retries, scenes, concurrent tasks, sessions, file size, storage quota, timeouts) with server ceilings, a streamed request-body cap, 80% storage alerts, and pre-run estimates |
 | Templates | Built-in (AI Video Generation, Image Generation, Research, Data Entry, Website Testing, Content Creation, Browser Workflow) + custom |
 | Dev mode | Built-in **Mock Video Generator** (`/mock-platform`) with configurable speed, failure rate, login and human-check simulation for end-to-end runs without AI credits |
-| Tests | 137 backend tests (including body-size, pairing/approval flows and mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
+| Tests | 139 backend tests (including schedule editing, body-size, pairing/approval flows and mocked OpenAI-compatible, Gemini, Ollama and Anthropic transports) on a fake browser backend; UI snapshot script; API/UI smoke scripts |
 
 ---
 

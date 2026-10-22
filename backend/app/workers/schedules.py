@@ -58,6 +58,20 @@ async def dispatch_due_schedules(*, batch_size: int = 20) -> int:
                 await _disable_invalid_schedule(db, schedule, "Organization no longer exists")
                 continue
 
+            # Re-read after acquiring the organization lock: an API edit/pause may have committed
+            # while this worker waited for that lock. Use the current policy and next-run time.
+            current = (
+                await db.execute(
+                    select(TaskSchedule)
+                    .where(TaskSchedule.id == schedule.id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one_or_none()
+            if current is None or not current.enabled or _utc(current.next_run_at) > now:
+                continue
+            schedule = current
+
             config_error = ""
             try:
                 config = await schedule_config_for_dispatch(schedule, org)

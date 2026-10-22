@@ -11,7 +11,7 @@
 * Suites are serial on purpose: the embedded worker launches (fake) browsers; running pytest in
   parallel with other heavy processes makes session start-up timeouts flaky.
 
-## Backend suite (137 collected pytest cases across 16 modules; verified 2026-10-16)
+## Backend suite (139 collected pytest cases across 16 modules; verified 2026-10-22)
 
 ```bash
 cd backend && source ../.venv/bin/activate
@@ -34,7 +34,7 @@ ruff check app tests && ruff format --check app tests
 | `test_adapter_approval.py` | 5 | Adapter-native driver approval gates and rejection preventing browser operations |
 | `test_device_pairings.py` | 4 | Pairing expiry, approval, one-time exchange and session revocation |
 | `test_media_streaming.py` | 2 | Bounded media/download and export streaming behavior |
-| `test_schedules.py` | 3 | Schedule policy validation and due-run dispatch behavior |
+| `test_schedules.py` | 5 | Schedule edits, policy validation, and due-run dispatch behavior |
 | `test_security_hardening.py` | 9 | Production configuration, request-size configuration/integration, URL redaction/policy, signed-token log redaction, trusted proxies and mock-router isolation |
 | `test_storage_quota.py` | 2 | Organization storage cap configuration and upload enforcement |
 | `test_request_body_limit.py` | 4 | Declared and chunked request-size limits, exact-boundary acceptance and ambiguous Content-Length rejection |

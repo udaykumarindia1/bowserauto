@@ -349,8 +349,17 @@ class TaskScheduleCreate(BaseModel):
 
 class TaskScheduleUpdate(BaseModel):
     enabled: bool | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    kind: (
+        Literal["browser_workflow", "research", "data_entry", "website_testing", "content_creation"] | None
+    ) = None
+    instructions: str | None = Field(default=None, min_length=1, max_length=20_000)
+    platform_key: str | None = Field(default=None, max_length=60)
+    browser_session_id: uuid.UUID | None = None
+    priority: int | None = Field(default=None, ge=1, le=10)
     run_at: datetime | None = None
     repeat_interval_minutes: int | None = Field(default=None, ge=15, le=10_080)
+    config: TaskConfig | None = None
 
     @field_validator("run_at")
     @classmethod
@@ -358,6 +367,15 @@ class TaskScheduleUpdate(BaseModel):
         if value is not None and (value.tzinfo is None or value.utcoffset() is None):
             raise ValueError("run_at must include a timezone")
         return value
+
+    @model_validator(mode="after")
+    def _require_safe_schedule_update_policy(self) -> TaskScheduleUpdate:
+        if self.config is not None:
+            if not self.config.allowed_domains:
+                raise ValueError("Scheduled workflows require at least one allowed domain")
+            if self.config.approval_mode == "never":
+                raise ValueError("Scheduled workflows cannot disable action approval")
+        return self
 
 
 class TaskScheduleOut(ORMModel):

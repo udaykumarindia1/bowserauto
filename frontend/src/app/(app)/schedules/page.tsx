@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CalendarClock, Clock3, Globe, Pause, Play, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Clock3, Globe, Pause, Pencil, Play, Plus, RotateCcw, Save, ShieldCheck, Trash2, X } from "lucide-react";
 
 import { ConfirmBanner } from "@/components/hud/confirm-banner";
 import { HudPanel, HudPill } from "@/components/hud/hud-primitives";
@@ -20,16 +20,52 @@ const REPEAT_OPTIONS = [
   { value: "360", label: "Every 6 hours" },
   { value: "1440", label: "Daily" },
   { value: "10080", label: "Weekly" },
+  { value: "custom", label: "Custom interval" },
 ];
+
+type ScheduleForm = {
+  title: string;
+  kind: string;
+  instructions: string;
+  platform_key: string;
+  browser_session_id: string;
+  priority: string;
+  repeat: string;
+  custom_repeat: string;
+  allowed_domains: string;
+  approval_mode: "confirm_writes" | "confirm_all";
+};
+
+type SchedulePayload = Omit<Parameters<typeof api.schedules.create>[0], "browser_session_id"> & {
+  browser_session_id?: string | null;
+};
+
+const EMPTY_FORM: ScheduleForm = {
+  title: "",
+  kind: "browser_workflow",
+  instructions: "",
+  platform_key: "generic",
+  browser_session_id: "",
+  priority: "5",
+  repeat: "once",
+  custom_repeat: "120",
+  allowed_domains: "",
+  approval_mode: "confirm_writes",
+};
 
 function localDateTimeValue(date = new Date(Date.now() + 60 * 60 * 1000)) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
 
+function scheduleDate(value: string) {
+  // SQLite may serialize UTC timestamps without an offset; match the backend's UTC interpretation.
+  return new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`);
+}
+
 function displayDate(value: string | null) {
   if (!value) return "Not run yet";
-  const date = new Date(value);
+  const date = scheduleDate(value);
   return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleString();
 }
 
@@ -44,12 +80,14 @@ function ScheduleCard({
   schedule,
   writable,
   onToggle,
+  onEdit,
   onDelete,
   busy,
 }: {
   schedule: TaskSchedule;
   writable: boolean;
   onToggle: (schedule: TaskSchedule) => void;
+  onEdit: (schedule: TaskSchedule) => void;
   onDelete: (schedule: TaskSchedule) => void;
   busy: boolean;
 }) {
@@ -111,6 +149,11 @@ function ScheduleCard({
         ) : null}
         <span className="flex-1" />
         {writable && !completedOnce ? (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => onEdit(schedule)}>
+            <Pencil /> Edit
+          </Button>
+        ) : null}
+        {writable && !completedOnce ? (
           <Button
             variant="outline"
             size="sm"
@@ -139,50 +182,35 @@ export default function SchedulesPage() {
   const platforms = useQuery({ queryKey: ["platforms"], queryFn: api.platforms.list });
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const [confirmDelete, setConfirmDelete] = React.useState<TaskSchedule | null>(null);
+  const [editing, setEditing] = React.useState<TaskSchedule | null>(null);
   const [runAt, setRunAt] = React.useState("");
-  const [form, setForm] = React.useState({
-    title: "",
-    kind: "browser_workflow",
-    instructions: "",
-    platform_key: "generic",
-    browser_session_id: "",
-    priority: "5",
-    repeat: "once",
-    allowed_domains: "",
-    approval_mode: "confirm_writes" as "confirm_writes" | "confirm_all",
-  });
+  const [form, setForm] = React.useState<ScheduleForm>(EMPTY_FORM);
 
   React.useEffect(() => setRunAt(localDateTimeValue()), []);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["schedules"] });
-  const create = useMutation({
-    mutationFn: () => {
-      const allowedDomains = form.allowed_domains.split(/[\n,]/).map((host) => host.trim()).filter(Boolean);
-      if (!allowedDomains.length) throw new Error("Add at least one exact allowed hostname.");
-      if (!runAt || new Date(runAt).getTime() <= Date.now()) throw new Error("Choose a future run time.");
-      return api.schedules.create({
-        title: form.title.trim(),
-        kind: form.kind,
-        instructions: form.instructions.trim(),
-        platform_key: form.platform_key,
-        browser_session_id: form.browser_session_id || undefined,
-        priority: Number(form.priority),
-        run_at: new Date(runAt).toISOString(),
-        repeat_interval_minutes: form.repeat === "once" ? null : Number(form.repeat),
-        config: {
-          agent_mode: "generic",
-          approval_mode: form.approval_mode,
-          allowed_domains: allowedDomains,
-        },
+  const save = useMutation({
+    mutationFn: ({ scheduleId, body }: { scheduleId?: string; body: SchedulePayload }) =>
+      scheduleId
+        ? api.schedules.update(scheduleId, body)
+        : api.schedules.create({ ...body, browser_session_id: body.browser_session_id || undefined }),
+    onSuccess: (_schedule, variables) => {
+      refresh();
+      setEditing(null);
+      setForm({ ...EMPTY_FORM });
+      setRunAt(localDateTimeValue());
+      toast({
+        title: variables.scheduleId ? "Schedule updated" : "Schedule created",
+        description: variables.scheduleId ? "Future runs will use the updated settings." : "The worker will queue it at the selected time.",
+        variant: "success",
       });
     },
-    onSuccess: () => {
-      refresh();
-      setForm((current) => ({ ...current, title: "", instructions: "", allowed_domains: "" }));
-      toast({ title: "Schedule created", description: "The worker will queue it at the selected time.", variant: "success" });
-    },
-    onError: (error: Error) => toast({ title: "Could not create schedule", description: error.message, variant: "destructive" }),
+    onError: (error: Error, variables) => toast({
+      title: variables.scheduleId ? "Could not update schedule" : "Could not create schedule",
+      description: error.message,
+      variant: "destructive",
+    }),
   });
-  const update = useMutation({
+  const toggle = useMutation({
     mutationFn: (schedule: TaskSchedule) => api.schedules.update(schedule.id, { enabled: !schedule.enabled }),
     onSuccess: () => { refresh(); toast({ title: "Schedule updated", variant: "success" }); },
     onError: (error: Error) => toast({ title: "Could not update schedule", description: error.message, variant: "destructive" }),
@@ -193,9 +221,90 @@ export default function SchedulesPage() {
     onError: (error: Error) => toast({ title: "Could not delete schedule", description: error.message, variant: "destructive" }),
   });
 
-  const enabledPlatforms = (platforms.data ?? []).filter((platform) => platform.enabled);
+  const enabledPlatforms = (platforms.data ?? []).filter((platform) => platform.enabled || platform.key === form.platform_key);
   const visibleSchedules = schedules.data ?? [];
-  const busyFor = (id: string) => (update.isPending && update.variables?.id === id) || (remove.isPending && remove.variables === id);
+  const busyFor = (id: string) =>
+    (save.isPending && save.variables?.scheduleId === id)
+    || (toggle.isPending && toggle.variables?.id === id)
+    || (remove.isPending && remove.variables === id);
+
+  const startEditing = (schedule: TaskSchedule) => {
+    const interval = schedule.repeat_interval_minutes;
+    const isPreset = interval != null && REPEAT_OPTIONS.some((option) => option.value === String(interval));
+    setEditing(schedule);
+    setRunAt(localDateTimeValue(scheduleDate(schedule.next_run_at)));
+    setForm({
+      title: schedule.title,
+      kind: schedule.kind,
+      instructions: schedule.instructions,
+      platform_key: schedule.platform_key,
+      browser_session_id: schedule.browser_session_id ?? "",
+      priority: String(schedule.priority),
+      repeat: interval == null ? "once" : isPreset ? String(interval) : "custom",
+      custom_repeat: String(interval ?? 120),
+      allowed_domains: Array.isArray(schedule.config.allowed_domains)
+        ? (schedule.config.allowed_domains as string[]).join("\n")
+        : "",
+      approval_mode: schedule.config.approval_mode === "confirm_all" ? "confirm_all" : "confirm_writes",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelEditing = () => {
+    setEditing(null);
+    setForm({ ...EMPTY_FORM });
+    setRunAt(localDateTimeValue());
+  };
+
+  const submitForm = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const title = form.title.trim();
+      const instructions = form.instructions.trim();
+      if (!title || !instructions) throw new Error("Workflow name and instructions are required.");
+      const allowedDomains = form.allowed_domains.split(/[\n,]/).map((host) => host.trim()).filter(Boolean);
+      if (!allowedDomains.length) throw new Error("Add at least one exact allowed hostname.");
+      const runDate = new Date(runAt);
+      if (!runAt || !Number.isFinite(runDate.getTime()) || runDate.getTime() <= Date.now()) {
+        throw new Error("Choose a future run time.");
+      }
+      const priority = Number(form.priority);
+      if (!Number.isInteger(priority) || priority < 1 || priority > 10) {
+        throw new Error("Priority must be a whole number from 1 to 10.");
+      }
+      let repeatInterval: number | null = null;
+      if (form.repeat === "custom") {
+        repeatInterval = Number(form.custom_repeat);
+        if (!Number.isInteger(repeatInterval) || repeatInterval < 15 || repeatInterval > 10_080) {
+          throw new Error("Custom repeat must be a whole number between 15 and 10,080 minutes.");
+        }
+      } else if (form.repeat !== "once") {
+        repeatInterval = Number(form.repeat);
+      }
+      const body: SchedulePayload = {
+        title,
+        kind: form.kind,
+        instructions,
+        platform_key: form.platform_key,
+        browser_session_id: editing ? form.browser_session_id || null : form.browser_session_id || undefined,
+        priority,
+        run_at: runDate.toISOString(),
+        repeat_interval_minutes: repeatInterval,
+        config: {
+          agent_mode: "generic",
+          approval_mode: form.approval_mode,
+          allowed_domains: allowedDomains,
+        },
+      };
+      save.mutate({ scheduleId: editing?.id, body });
+    } catch (error) {
+      toast({
+        title: editing ? "Could not update schedule" : "Could not create schedule",
+        description: error instanceof Error ? error.message : "Check the workflow details and try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-4 p-4">
@@ -206,8 +315,13 @@ export default function SchedulesPage() {
       />
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.5fr)]">
         {writable ? (
-          <HudPanel title="▸ CREATE SCHEDULE" className="xl:sticky xl:top-4" corners>
-            <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
+          <HudPanel
+            title={editing ? "▸ EDIT SCHEDULE" : "▸ CREATE SCHEDULE"}
+            actions={editing ? <Button size="sm" variant="ghost" onClick={cancelEditing}><X /> Cancel</Button> : undefined}
+            className="xl:sticky xl:top-4"
+            corners
+          >
+            <form className="space-y-3" onSubmit={submitForm}>
               <div className="space-y-1"><Label htmlFor="schedule-title">Workflow name</Label><Input id="schedule-title" required maxLength={200} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Daily public status check" /></div>
               <div className="space-y-1"><Label htmlFor="schedule-instructions">Task instructions</Label><Textarea id="schedule-instructions" required maxLength={20_000} value={form.instructions} onChange={(event) => setForm({ ...form, instructions: event.target.value })} placeholder="Describe the task the browser agent should perform…" /></div>
               <div className="grid grid-cols-2 gap-2">
@@ -220,14 +334,21 @@ export default function SchedulesPage() {
               </div>
               <div className="space-y-1"><Label htmlFor="schedule-session">Browser profile (optional)</Label><Select id="schedule-session" value={form.browser_session_id} onChange={(event) => setForm({ ...form, browser_session_id: event.target.value })}>
                 <option value="">Worker-managed profile</option>
-                {(sessions.data ?? []).filter((session) => session.status !== "expired").map((session) => <option key={session.id} value={session.id}>{session.name} · {session.platform_key}</option>)}
+                {(sessions.data ?? []).filter((session) => session.status !== "expired" || session.id === form.browser_session_id).map((session) => <option key={session.id} value={session.id}>{session.name} · {session.platform_key}{session.status === "expired" ? " · expired" : ""}</option>)}
               </Select><p className="text-[10px] text-muted-foreground">Existing logins stay on the worker. Authentication challenges must be completed manually.</p></div>
               <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1"><Label htmlFor="schedule-run-at">First run</Label><Input id="schedule-run-at" type="datetime-local" required value={runAt} onChange={(event) => setRunAt(event.target.value)} /></div>
+                <div className="space-y-1"><Label htmlFor="schedule-run-at">{editing ? "Next run" : "First run"}</Label><Input id="schedule-run-at" type="datetime-local" required value={runAt} onChange={(event) => setRunAt(event.target.value)} /></div>
                 <div className="space-y-1"><Label htmlFor="schedule-repeat">Repeat</Label><Select id="schedule-repeat" value={form.repeat} onChange={(event) => setForm({ ...form, repeat: event.target.value })}>
                   {REPEAT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </Select></div>
               </div>
+              {form.repeat === "custom" ? (
+                <div className="space-y-1">
+                  <Label htmlFor="schedule-custom-repeat">Repeat interval (minutes)</Label>
+                  <Input id="schedule-custom-repeat" type="number" min={15} max={10_080} step={1} required value={form.custom_repeat} onChange={(event) => setForm({ ...form, custom_repeat: event.target.value })} />
+                  <p className="text-[10px] text-muted-foreground">Choose a whole number from 15 minutes to 7 days.</p>
+                </div>
+              ) : null}
               <div className="space-y-1"><Label htmlFor="schedule-domains">Exact allowed hostnames</Label><Textarea id="schedule-domains" required value={form.allowed_domains} onChange={(event) => setForm({ ...form, allowed_domains: event.target.value })} placeholder={'status.example.com\nwww.example.org'} className="min-h-[72px]" /><p className="text-[10px] text-muted-foreground">One hostname per line or comma-separated. No scheme, port, path, wildcard, or IP address.</p></div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1"><Label htmlFor="schedule-approval">Action approval</Label><Select id="schedule-approval" value={form.approval_mode} onChange={(event) => setForm({ ...form, approval_mode: event.target.value as "confirm_writes" | "confirm_all" })}>
@@ -236,7 +357,9 @@ export default function SchedulesPage() {
                 <div className="space-y-1"><Label htmlFor="schedule-priority">Priority (1–10)</Label><Input id="schedule-priority" type="number" min={1} max={10} value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} /></div>
               </div>
               <div className="flex gap-2 rounded-lg border border-primary/20 bg-primary/5 p-2.5 font-sans text-[10px] leading-relaxed text-muted-foreground"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" /><span>Schedules cannot disable approval. A run is queued as a regular task; approval, domain checks, and manual login challenges still apply.</span></div>
-              <Button className="w-full" type="submit" loading={create.isPending}><Plus /> Create scheduled workflow</Button>
+              <Button className="w-full" type="submit" loading={save.isPending}>
+                {editing ? <><Save /> Save schedule changes</> : <><Plus /> Create scheduled workflow</>}
+              </Button>
             </form>
           </HudPanel>
         ) : null}
@@ -256,7 +379,8 @@ export default function SchedulesPage() {
                   key={schedule.id}
                   schedule={schedule}
                   writable={writable}
-                  onToggle={(item) => update.mutate(item)}
+                  onToggle={(item) => toggle.mutate(item)}
+                  onEdit={startEditing}
                   onDelete={(item) => setConfirmDelete(item)}
                   busy={busyFor(schedule.id)}
                 />

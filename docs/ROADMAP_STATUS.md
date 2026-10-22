@@ -66,9 +66,10 @@ checks still require an operator-controlled environment.
   clicks, typing, key presses, selection, upload/download and tab closure; `confirm_all` also gates
   navigation, scrolling, hovering, tab changes and page-script evaluation. Read-only inspection is
   not blocked. `never` remains an explicit task-level opt-out; scheduled tasks cannot use it.
-- The schedule API/HUD supports create/list/pause/resume/delete, future UTC run times, recurring
-  intervals, optional browser sessions and domain/action policies. Schedules dispatch only to the
-  generic agent and require an allowlist and approval mode.
+- The schedule API/HUD supports create/list/edit/pause/resume/delete, future UTC run times,
+  preset and custom recurring intervals (15–10,080 minutes), optional browser sessions, and
+  domain/action policies. Dispatch is serialized with API edits, then re-reads the schedule and
+  rechecks policy. Schedules use the generic agent and require an allowlist and approval mode.
 - Adapter prompts and selector/target semantics cannot be classified perfectly by software; keep
   tasks visible and review the action preview before approving external-site operations.
 
@@ -94,7 +95,7 @@ checks still require an operator-controlled environment.
 
 ## Verification and remaining deployment work
 
-- Backend: Ruff check/format plus the full automated suite pass (137 tests); tests use SQLite, mocked LLM
+- Backend: Ruff check/format plus the full automated suite pass (139 tests); tests use SQLite, mocked LLM
   transports and fake browser interactions. No real AI generation is called.
 - Frontend: `npm ci`, lint, TypeScript typecheck, production build and `npm audit --audit-level=high`
   pass with zero reported npm vulnerabilities.

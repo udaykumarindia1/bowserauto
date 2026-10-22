@@ -38,7 +38,7 @@ supersede their baseline status labels:
 
 ### Current branch verification
 
-- Backend: 137 collected tests pass, with Ruff check and format checks clean. Automated browser tests use the fake driver.
+- Backend: 139 collected tests pass, with Ruff check and format checks clean. Automated browser tests use the fake driver; schedule-edit and policy regressions are covered.
 - Frontend: lint, TypeScript, production build, and `npm audit --audit-level=high` pass; the current npm audit reports zero vulnerabilities.
 - CI workflow exists for backend tests/lint and frontend lint/typecheck/build/audit. A dedicated frontend unit/integration suite remains absent.
 - Body-size limits are now covered for declared and chunked request bodies. This does not replace a trusted-ingress limit or a real deployment load test.
